@@ -1,0 +1,27 @@
+{
+  "name": "trace-stream-consumer",
+  "stream": "TRACE_STREAM",
+  "config": {
+    "durable_name": "trace-stream-consumer",
+    "description": "Durable consumer for processing trace ingestion events. Ensures exactly-once delivery and crash recovery.",
+    "deliver_policy": "all",
+    "ack_policy": "explicit",
+    "replay_policy": "instant",
+    "ack_wait": 30000000000,
+    "max_ack_pending": 500,
+    "max_deliver": 5,
+    "backoff": [1000000000, 5000000000, 10000000000],
+    "filter_subject": "pulse.traces.ingest.>",
+    "_comment": {
+      "durable_name": "Persists consumer state for crash recovery and exactly-once delivery semantics.",
+      "deliver_policy": "Deliver all messages from the beginning (useful for replay scenarios).",
+      "ack_policy": "Messages must be explicitly acknowledged to be marked as processed.",
+      "replay_policy": "Deliver messages as fast as possible (no rate limiting).",
+      "ack_wait": "30 seconds to acknowledge message (down from 60) - expect processing to complete within 30s.",
+      "max_ack_pending": "Max 500 unacknowledged messages in flight (down from 1000) - reduces memory usage.",
+      "max_deliver": "Redeliver failed messages up to 5 times before sending to dead letter queue.",
+      "backoff": "Exponential backoff: 1s, 5s, 10s between redelivery attempts.",
+      "filter_subject": "Only consume messages on pulse.traces.ingest subject."
+    }
+  }
+}
