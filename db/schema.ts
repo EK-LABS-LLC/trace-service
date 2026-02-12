@@ -19,9 +19,7 @@ export type ProjectRole = "admin" | "user";
 export const projects = pgTable("projects", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const apiKeys = pgTable("api_keys", {
@@ -30,9 +28,7 @@ export const apiKeys = pgTable("api_keys", {
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
   keyHash: varchar("key_hash", { length: 255 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const sessions = pgTable("sessions", {
@@ -40,9 +36,7 @@ export const sessions = pgTable("sessions", {
   projectId: uuid("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   metadata: jsonb("metadata"),
 });
 
@@ -56,9 +50,7 @@ export const traces = pgTable(
     sessionId: uuid("session_id").references(() => sessions.id, {
       onDelete: "set null",
     }),
-    timestamp: timestamp("timestamp", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
     latencyMs: integer("latency_ms").notNull(),
     provider: varchar("provider", { length: 50 }).notNull(),
     modelRequested: varchar("model_requested", { length: 255 }).notNull(),
@@ -90,21 +82,25 @@ export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 
-export const userProjects = pgTable("user_projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  userId: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  projectId: uuid("project_id")
-    .references(() => projects.id, { onDelete: "cascade" })
-    .notNull(),
-  role: varchar("role", { length: 50 }).notNull().default("user"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [
-  index("user_projects_user_idx").on(table.userId),
-  index("user_projects_project_idx").on(table.projectId),
-  uniqueIndex("user_projects_user_project_unique_idx").on(table.userId, table.projectId),
-]);
+export const userProjects = pgTable(
+  "user_projects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .references(() => user.id, { onDelete: "cascade" })
+      .notNull(),
+    projectId: uuid("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    role: varchar("role", { length: 50 }).notNull().default("user"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("user_projects_user_idx").on(table.userId),
+    index("user_projects_project_idx").on(table.projectId),
+    uniqueIndex("user_projects_user_project_unique_idx").on(table.userId, table.projectId),
+  ]
+);
 
 export type UserProject = typeof userProjects.$inferSelect;
 export type NewUserProject = typeof userProjects.$inferInsert;

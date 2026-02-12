@@ -23,7 +23,10 @@ export class AuthServiceError extends Error {
   }
 }
 
-export async function signupWithProject(input: SignupWithProjectInput, db: Database): Promise<void> {
+export async function signupWithProject(
+  input: SignupWithProjectInput,
+  db: Database
+): Promise<void> {
   const name = input.name?.trim();
   const email = input.email?.trim().toLowerCase();
   const password = input.password;

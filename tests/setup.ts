@@ -26,7 +26,11 @@ function extractSessionCookie(setCookieHeader: string | null): string | null {
   return `better-auth.session_token=${match[1]}`;
 }
 
-async function sessionFetch(path: string, sessionCookie: string, options: RequestInit = {}): Promise<Response> {
+async function sessionFetch(
+  path: string,
+  sessionCookie: string,
+  options: RequestInit = {}
+): Promise<Response> {
   return fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -126,12 +130,14 @@ export async function createTestProject(name: string = "Test Project"): Promise<
     throw new Error(`Failed to create test project (${createProjectResponse.status}): ${text}`);
   }
 
-  const projectData = await createProjectResponse.json() as { projectId: string; apiKey: string };
+  const projectData = (await createProjectResponse.json()) as { projectId: string; apiKey: string };
   const testProject = { id: projectData.projectId, apiKey: projectData.apiKey };
   testProjects.push(testProject);
   projectApiKeys.set(testProject.id, testProject.apiKey);
 
-  console.log(`[setup] Project created: ${projectData.projectId} (tracking ${testProjects.length} projects)`);
+  console.log(
+    `[setup] Project created: ${projectData.projectId} (tracking ${testProjects.length} projects)`
+  );
   return testProject;
 }
 
@@ -182,7 +188,7 @@ export async function createTestTraces(
     throw new Error(`Failed to list traces (${listResponse.status}): ${text}`);
   }
 
-  const listData = await listResponse.json() as { traces: Array<{ traceId: string }> };
+  const listData = (await listResponse.json()) as { traces: Array<{ traceId: string }> };
   return listData.traces.map((t) => t.traceId);
 }
 
@@ -190,7 +196,9 @@ export async function createTestTraces(
  * Clean up all test data
  */
 export async function cleanupTestData(): Promise<void> {
-  console.log(`[setup] Cleanup skipped (${testProjects.length} projects). API-only tests do not use direct DB cleanup.`);
+  console.log(
+    `[setup] Cleanup skipped (${testProjects.length} projects). API-only tests do not use direct DB cleanup.`
+  );
   testProjects.length = 0;
   projectApiKeys.clear();
   console.log("[setup] Cleanup complete");

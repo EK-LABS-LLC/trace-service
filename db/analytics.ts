@@ -235,12 +235,7 @@ export async function getTotalSessions(
   const result = await db
     .select({ total: sql<number>`COUNT(DISTINCT ${traces.sessionId})` })
     .from(traces)
-    .where(
-      and(
-        buildDateConditions(projectId, dateRange),
-        isNotNull(traces.sessionId)
-      )
-    );
+    .where(and(buildDateConditions(projectId, dateRange), isNotNull(traces.sessionId)));
 
   return Number(result[0]?.total ?? 0);
 }
@@ -256,12 +251,7 @@ export async function getErrorCount(
   const result = await db
     .select({ total: count() })
     .from(traces)
-    .where(
-      and(
-        buildDateConditions(projectId, dateRange),
-        eq(traces.status, "error")
-      )
-    );
+    .where(and(buildDateConditions(projectId, dateRange), eq(traces.status, "error")));
 
   return result[0]?.total ?? 0;
 }
@@ -338,10 +328,7 @@ export async function getLatencyDistribution(
   projectId: string,
   dateRange: DateRange
 ): Promise<LatencyBucket[]> {
-  const conditions = and(
-    buildDateConditions(projectId, dateRange),
-    isNotNull(traces.latencyMs)
-  );
+  const conditions = and(buildDateConditions(projectId, dateRange), isNotNull(traces.latencyMs));
 
   const result = await db
     .select({
@@ -360,8 +347,7 @@ export async function getLatencyDistribution(
       count: count(),
     })
     .from(traces)
-    .where(conditions)
-    .groupBy(sql`
+    .where(conditions).groupBy(sql`
       CASE
         WHEN ${traces.latencyMs} < 200 THEN '0-200'
         WHEN ${traces.latencyMs} < 400 THEN '200-400'
@@ -372,8 +358,7 @@ export async function getLatencyDistribution(
         WHEN ${traces.latencyMs} < 2000 THEN '1.5-2k'
         ELSE '2k+'
       END
-    `)
-    .orderBy(sql`
+    `).orderBy(sql`
       CASE
         WHEN ${traces.latencyMs} < 200 THEN 1
         WHEN ${traces.latencyMs} < 400 THEN 2
@@ -400,10 +385,7 @@ export async function getLatencyPercentiles(
   projectId: string,
   dateRange: DateRange
 ): Promise<LatencyPercentiles> {
-  const conditions = and(
-    buildDateConditions(projectId, dateRange),
-    isNotNull(traces.latencyMs)
-  );
+  const conditions = and(buildDateConditions(projectId, dateRange), isNotNull(traces.latencyMs));
 
   const result = await db
     .select({
@@ -431,9 +413,10 @@ export async function getCostOverTimeByProvider(
   groupBy: "day" | "hour" = "day"
 ): Promise<CostOverTimeByProvider[]> {
   const conditions = buildDateConditions(projectId, dateRange);
-  const periodExpr = groupBy === "hour"
-    ? sql`date_trunc('hour', ${traces.timestamp})`
-    : sql`date_trunc('day', ${traces.timestamp})`;
+  const periodExpr =
+    groupBy === "hour"
+      ? sql`date_trunc('hour', ${traces.timestamp})`
+      : sql`date_trunc('day', ${traces.timestamp})`;
 
   const result = await db
     .select({

@@ -32,4 +32,3 @@ export async function handleCreateProjectUser(c: Context): Promise<Response> {
     throw error;
   }
 }
-

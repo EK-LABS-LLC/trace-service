@@ -18,10 +18,7 @@ export function hashApiKey(key: string): string {
  * @param db - Drizzle database instance
  * @returns The project ID if found, null otherwise
  */
-export async function getProjectIdByKeyHash(
-  keyHash: string,
-  db: Database
-): Promise<string | null> {
+export async function getProjectIdByKeyHash(keyHash: string, db: Database): Promise<string | null> {
   const [result] = await db
     .select({ projectId: apiKeys.projectId })
     .from(apiKeys)

@@ -86,7 +86,10 @@ export async function getTraces(c: Context): Promise<Response> {
     throw err;
   }
 
-  const parseDateParam = (value: string | number | undefined, boundary: "start" | "end"): Date | undefined => {
+  const parseDateParam = (
+    value: string | number | undefined,
+    boundary: "start" | "end"
+  ): Date | undefined => {
     if (value === undefined) return undefined;
 
     if (typeof value === "number") {
@@ -99,9 +102,7 @@ export async function getTraces(c: Context): Promise<Response> {
     if (!trimmed) return undefined;
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const iso = boundary === "start"
-        ? `${trimmed}T00:00:00.000Z`
-        : `${trimmed}T23:59:59.999Z`;
+      const iso = boundary === "start" ? `${trimmed}T00:00:00.000Z` : `${trimmed}T23:59:59.999Z`;
       const date = new Date(iso);
       return Number.isNaN(date.getTime()) ? undefined : date;
     }

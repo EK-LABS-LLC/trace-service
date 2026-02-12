@@ -41,12 +41,8 @@
           "name": "api_keys_project_id_projects_id_fk",
           "tableFrom": "api_keys",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -127,12 +123,8 @@
           "name": "sessions_project_id_projects_id_fk",
           "tableFrom": "sessions",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -313,12 +305,8 @@
           "name": "traces_project_id_projects_id_fk",
           "tableFrom": "traces",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -326,12 +314,8 @@
           "name": "traces_session_id_sessions_id_fk",
           "tableFrom": "traces",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }

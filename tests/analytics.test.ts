@@ -1,10 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import {
-  authFetch,
-  createTestProject,
-  createTestTraces,
-  cleanupTestData,
-} from "./setup";
+import { authFetch, createTestProject, createTestTraces, cleanupTestData } from "./setup";
 import type { CostDataPoint } from "../db/analytics";
 
 describe("Analytics Endpoint", () => {
@@ -50,7 +45,7 @@ describe("Analytics Endpoint", () => {
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
         testProject.apiKey
       );
-      const data = await response.json() as { totalRequests: number };
+      const data = (await response.json()) as { totalRequests: number };
 
       expect((data as { totalRequests: number }).totalRequests).toBe(20);
     });
@@ -60,7 +55,16 @@ describe("Analytics Endpoint", () => {
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
         testProject.apiKey
       );
-      const data = await response.json() as { computed: { costPerRequest: number, tokensPerRequest: number, costPer1kTokens: number, tracesPerSession: number, avgInputTokens: number, avgOutputTokens: number } };
+      const data = (await response.json()) as {
+        computed: {
+          costPerRequest: number;
+          tokensPerRequest: number;
+          costPer1kTokens: number;
+          tracesPerSession: number;
+          avgInputTokens: number;
+          avgOutputTokens: number;
+        };
+      };
 
       expect(data.computed).toHaveProperty("costPerRequest");
       expect(data.computed).toHaveProperty("tokensPerRequest");
@@ -75,14 +79,16 @@ describe("Analytics Endpoint", () => {
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
         testProject.apiKey
       );
-      const data = await response.json() as { totalTokens: { input: number, output: number, total: number } };
+      const data = (await response.json()) as {
+        totalTokens: { input: number; output: number; total: number };
+      };
 
-      expect((data as { totalTokens: { input: number, output: number, total: number } }).totalTokens).toHaveProperty("input");
+      expect(
+        (data as { totalTokens: { input: number; output: number; total: number } }).totalTokens
+      ).toHaveProperty("input");
       expect(data.totalTokens).toHaveProperty("output");
       expect(data.totalTokens).toHaveProperty("total");
-      expect(data.totalTokens.total).toBe(
-        data.totalTokens.input + data.totalTokens.output
-      );
+      expect(data.totalTokens.total).toBe(data.totalTokens.input + data.totalTokens.output);
     });
 
     test("calculates error rate correctly", async () => {
@@ -90,26 +96,20 @@ describe("Analytics Endpoint", () => {
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
         testProject.apiKey
       );
-      const data = await response.json() as { errorRate: number };
+      const data = (await response.json()) as { errorRate: number };
 
       // We created 20 traces, 1 is error (first one in createTestTraces)
       expect(data.errorRate).toBe(5); // 1/20 = 5%
     });
 
     test("requires date_from parameter", async () => {
-      const response = await authFetch(
-        `/v1/analytics?date_to=${dateTo}`,
-        testProject.apiKey
-      );
+      const response = await authFetch(`/v1/analytics?date_to=${dateTo}`, testProject.apiKey);
 
       expect(response.status).toBe(400);
     });
 
     test("requires date_to parameter", async () => {
-      const response = await authFetch(
-        `/v1/analytics?date_from=${dateFrom}`,
-        testProject.apiKey
-      );
+      const response = await authFetch(`/v1/analytics?date_from=${dateFrom}`, testProject.apiKey);
 
       expect(response.status).toBe(400);
     });
@@ -128,7 +128,7 @@ describe("Analytics Endpoint", () => {
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}&group_by=day`,
         testProject.apiKey
       );
-      const data = await response.json() as { costOverTime: CostDataPoint[] };
+      const data = (await response.json()) as { costOverTime: CostDataPoint[] };
 
       expect(response.status).toBe(200);
       expect(data.costOverTime).toBeInstanceOf(Array);

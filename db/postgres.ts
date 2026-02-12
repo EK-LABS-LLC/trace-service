@@ -2,11 +2,7 @@ import { eq, and, gte, lte, count, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import { traces, sessions } from "./schema";
 import type { Trace, NewTrace, Session, NewSession } from "./schema";
-import type {
-  StorageAdapter,
-  TraceQueryFilters,
-  TraceQueryResult,
-} from "./adapter";
+import type { StorageAdapter, TraceQueryFilters, TraceQueryResult } from "./adapter";
 import { db } from "./index";
 
 /**
@@ -33,10 +29,7 @@ export class PostgresStorage implements StorageAdapter {
     return trace ?? null;
   }
 
-  async queryTraces(
-    projectId: string,
-    filters: TraceQueryFilters = {}
-  ): Promise<TraceQueryResult> {
+  async queryTraces(projectId: string, filters: TraceQueryFilters = {}): Promise<TraceQueryResult> {
     const conditions = [eq(traces.projectId, projectId)];
 
     if (filters.sessionId) {
@@ -60,10 +53,7 @@ export class PostgresStorage implements StorageAdapter {
 
     const whereClause = and(...conditions);
 
-    const countResult = await this.db
-      .select({ total: count() })
-      .from(traces)
-      .where(whereClause);
+    const countResult = await this.db.select({ total: count() }).from(traces).where(whereClause);
     const total = countResult[0]?.total ?? 0;
 
     const limit = filters.limit ?? 100;
@@ -80,10 +70,7 @@ export class PostgresStorage implements StorageAdapter {
     return { traces: results, total };
   }
 
-  async countTraces(
-    projectId: string,
-    filters: TraceQueryFilters = {}
-  ): Promise<number> {
+  async countTraces(projectId: string, filters: TraceQueryFilters = {}): Promise<number> {
     const conditions = [eq(traces.projectId, projectId)];
 
     if (filters.sessionId) {
@@ -113,35 +100,26 @@ export class PostgresStorage implements StorageAdapter {
     return countResult[0]?.total ?? 0;
   }
 
-  async upsertSession(
-    projectId: string,
-    session: NewSession
-  ): Promise<Session> {
-    const insert = this.db
-      .insert(sessions)
-      .values({ ...session, projectId });
+  async upsertSession(projectId: string, session: NewSession): Promise<Session> {
+    const insert = this.db.insert(sessions).values({ ...session, projectId });
 
-    const withConflict = session.metadata !== undefined
-      ? insert.onConflictDoUpdate({
-          target: sessions.id,
-          set: { metadata: session.metadata },
-        })
-      : insert.onConflictDoNothing({ target: sessions.id });
+    const withConflict =
+      session.metadata !== undefined
+        ? insert.onConflictDoUpdate({
+            target: sessions.id,
+            set: { metadata: session.metadata },
+          })
+        : insert.onConflictDoNothing({ target: sessions.id });
 
     const result = await withConflict.returning();
     return result[0]!;
   }
 
-  async getSessionTraces(
-    sessionId: string,
-    projectId: string
-  ): Promise<Trace[]> {
+  async getSessionTraces(sessionId: string, projectId: string): Promise<Trace[]> {
     return this.db
       .select()
       .from(traces)
-      .where(
-        and(eq(traces.sessionId, sessionId), eq(traces.projectId, projectId))
-      )
+      .where(and(eq(traces.sessionId, sessionId), eq(traces.projectId, projectId)))
       .orderBy(sql`${traces.timestamp} ASC`);
   }
 }

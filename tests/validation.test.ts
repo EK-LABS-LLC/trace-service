@@ -1,10 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  traceSchema,
-  batchTraceSchema,
-  providerSchema,
-  statusSchema,
-} from "../shared/validation";
+import { traceSchema, batchTraceSchema, providerSchema, statusSchema } from "../shared/validation";
 
 /**
  * Helper to create a valid trace object for testing

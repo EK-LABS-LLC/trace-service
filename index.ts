@@ -6,12 +6,7 @@ import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/errors";
 import { logger } from "./middleware/logger";
 import { auth } from "./auth/auth";
-import {
-  handleBatchTraces,
-  handleAsyncTrace,
-  getTraces,
-  getTraceById,
-} from "./routes/traces";
+import { handleBatchTraces, handleAsyncTrace, getTraces, getTraceById } from "./routes/traces";
 import { handleGetSessionTraces } from "./routes/sessions";
 import { handleGetAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
@@ -29,14 +24,17 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", service: "pulse" });
 });
 
-app.use("/api/auth/*", cors({
-  origin: "http://localhost:5173",
-  allowHeaders: ["Content-Type", "Authorization"],
-  allowMethods: ["POST", "GET", "OPTIONS"],
-  exposeHeaders: ["Content-Length"],
-  maxAge: 600,
-  credentials: true,
-}));
+app.use(
+  "/api/auth/*",
+  cors({
+    origin: "http://localhost:5173",
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 600,
+    credentials: true,
+  })
+);
 
 // Better-Auth exposes this route by default
 app.post("/api/auth/sign-up/email", (c) => {
@@ -47,12 +45,15 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
-app.use("/dashboard/api/*", cors({
-  origin: "http://localhost:5173",
-  allowHeaders: ["Content-Type", "Authorization", "X-Project-Id"],
-  allowMethods: ["POST", "GET", "DELETE", "OPTIONS"],
-  credentials: true,
-}));
+app.use(
+  "/dashboard/api/*",
+  cors({
+    origin: "http://localhost:5173",
+    allowHeaders: ["Content-Type", "Authorization", "X-Project-Id"],
+    allowMethods: ["POST", "GET", "DELETE", "OPTIONS"],
+    credentials: true,
+  })
+);
 
 app.post("/dashboard/api/signup", handleSignupWithProject);
 app.route("/dashboard/api", dashboard);

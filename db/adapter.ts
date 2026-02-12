@@ -50,10 +50,7 @@ export interface StorageAdapter {
   /**
    * Query traces for a project with optional filters and pagination.
    */
-  queryTraces(
-    projectId: string,
-    filters?: TraceQueryFilters
-  ): Promise<TraceQueryResult>; 
+  queryTraces(projectId: string, filters?: TraceQueryFilters): Promise<TraceQueryResult>;
 
   /**
    * Count traces for a project with optional filters.
@@ -65,10 +62,7 @@ export interface StorageAdapter {
    * If a session with the given ID exists, update its metadata.
    * Otherwise, create a new session.
    */
-  upsertSession(
-    projectId: string,
-    session: NewSession
-  ): Promise<Session>;
+  upsertSession(projectId: string, session: NewSession): Promise<Session>;
 
   /**
    * Get all traces for a session, ordered by timestamp ascending.

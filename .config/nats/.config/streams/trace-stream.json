@@ -1,9 +1,7 @@
 {
   "name": "TRACE_STREAM",
   "description": "Primary stream for trace ingestion events. Stores LLM trace data for analytics and debugging.",
-  "subjects": [
-    "pulse.traces.>"
-  ],
+  "subjects": ["pulse.traces.>"],
   "retention": "limits",
   "max_msgs_per_subject": -1,
   "max_msgs": 1000000,

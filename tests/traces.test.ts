@@ -1,11 +1,5 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import {
-  BASE_URL,
-  authFetch,
-  createTestProject,
-  createTestTraces,
-  cleanupTestData,
-} from "./setup";
+import { BASE_URL, authFetch, createTestProject, createTestTraces, cleanupTestData } from "./setup";
 
 interface Trace {
   traceId: string;
@@ -70,10 +64,7 @@ describe("Traces Endpoints", () => {
     });
 
     test("respects offset parameter", async () => {
-      const response = await authFetch(
-        "/v1/traces?limit=5&offset=5",
-        testProject.apiKey
-      );
+      const response = await authFetch("/v1/traces?limit=5&offset=5", testProject.apiKey);
       const data = (await response.json()) as TracesResponse;
 
       expect(response.status).toBe(200);
@@ -82,10 +73,7 @@ describe("Traces Endpoints", () => {
     });
 
     test("filters by provider", async () => {
-      const response = await authFetch(
-        "/v1/traces?provider=openai",
-        testProject.apiKey
-      );
+      const response = await authFetch("/v1/traces?provider=openai", testProject.apiKey);
       const data = (await response.json()) as TracesResponse;
 
       expect(response.status).toBe(200);
@@ -95,10 +83,7 @@ describe("Traces Endpoints", () => {
     });
 
     test("filters by status", async () => {
-      const response = await authFetch(
-        "/v1/traces?status=error",
-        testProject.apiKey
-      );
+      const response = await authFetch("/v1/traces?status=error", testProject.apiKey);
       const data = (await response.json()) as TracesResponse;
 
       expect(response.status).toBe(200);
@@ -124,10 +109,7 @@ describe("Traces Endpoints", () => {
   describe("GET /v1/traces/:id", () => {
     test("returns single trace by id", async () => {
       const traceId = traceIds[0] ?? "";
-      const response = await authFetch(
-        `/v1/traces/${traceId}`,
-        testProject.apiKey
-      );
+      const response = await authFetch(`/v1/traces/${traceId}`, testProject.apiKey);
       const data = (await response.json()) as Trace;
 
       expect(response.status).toBe(200);
@@ -138,10 +120,7 @@ describe("Traces Endpoints", () => {
 
     test("returns 404 for non-existent trace", async () => {
       const fakeId = "00000000-0000-0000-0000-000000000000";
-      const response = await authFetch(
-        `/v1/traces/${fakeId}`,
-        testProject.apiKey
-      );
+      const response = await authFetch(`/v1/traces/${fakeId}`, testProject.apiKey);
 
       expect(response.status).toBe(404);
     });
@@ -262,9 +241,7 @@ describe("Traces Endpoints", () => {
 
       expect(persistedTrace).toBeDefined();
       expect(persistedTrace?.provider).toBe(tracePayload.provider);
-      expect((persistedTrace as { sessionId?: string }).sessionId).toBe(
-        tracePayload.session_id
-      );
+      expect((persistedTrace as { sessionId?: string }).sessionId).toBe(tracePayload.session_id);
     });
 
     test("rejects invalid trace payload", async () => {

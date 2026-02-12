@@ -46,10 +46,7 @@ export function generateApiKey(): string {
  * @param db - Drizzle database instance
  * @returns The created project info including the plaintext API key (only returned once)
  */
-export async function createProject(
-  name: string,
-  db: Database
-): Promise<CreateProjectResult> {
+export async function createProject(name: string, db: Database): Promise<CreateProjectResult> {
   return db.transaction(async (tx) => {
     const apiKey = generateApiKey();
     const keyHash = hashApiKey(apiKey);
@@ -105,10 +102,7 @@ export async function createProjectForUser(
 /**
  * List projects the user has access to.
  */
-export async function getUserProjects(
-  userId: string,
-  db: Database
-): Promise<UserProjectInfo[]> {
+export async function getUserProjects(userId: string, db: Database): Promise<UserProjectInfo[]> {
   const rows = await db
     .select({
       id: projects.id,
@@ -133,10 +127,7 @@ export async function getUserProjects(
  * @param db - Drizzle database instance
  * @returns List of API keys (without the actual key values, which are hashed)
  */
-export async function getApiKeys(
-  projectId: string,
-  db: Database
-): Promise<ApiKeyInfo[]> {
+export async function getApiKeys(projectId: string, db: Database): Promise<ApiKeyInfo[]> {
   const keys = await db
     .select({
       id: apiKeys.id,

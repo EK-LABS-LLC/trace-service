@@ -9,4 +9,3 @@ export function normalizeProjectRole(role: string | null | undefined): ProjectRo
   }
   return "user";
 }
-

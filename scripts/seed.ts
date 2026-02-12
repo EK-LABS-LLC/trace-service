@@ -75,9 +75,7 @@ function generateTrace(projectId: string, sessionId: string, timestamp: Date): N
     status: isError ? "error" : "success",
     requestBody: {
       model,
-      messages: [
-        { role: "user", content: faker.lorem.paragraph() },
-      ],
+      messages: [{ role: "user", content: faker.lorem.paragraph() }],
       max_tokens: 4096,
     },
     responseBody: isError
@@ -95,7 +93,13 @@ function generateTrace(projectId: string, sessionId: string, timestamp: Date): N
     outputText: isError ? null : faker.lorem.paragraphs(2),
     finishReason: isError ? null : "stop",
     error: isError
-      ? { message: faker.helpers.arrayElement(["Rate limit exceeded", "Context length exceeded", "Service unavailable"]) }
+      ? {
+          message: faker.helpers.arrayElement([
+            "Rate limit exceeded",
+            "Context length exceeded",
+            "Service unavailable",
+          ]),
+        }
       : null,
     metadata: {
       userId: faker.string.uuid(),

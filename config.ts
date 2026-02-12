@@ -9,7 +9,7 @@ const envSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(32, "BETTER_AUTH_SECRET must be at least 32 characters"),
   BETTER_AUTH_URL: z.string().default("http://localhost:3000"),
   TRACE_STREAM_NAME: z.string().default("TRACE_STREAM"),
-  TRACE_CONSUMER_DURABLE: z.string().default("trace-stream-consumer")
+  TRACE_CONSUMER_DURABLE: z.string().default("trace-stream-consumer"),
 });
 
 function parseEnv() {
