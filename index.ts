@@ -12,6 +12,7 @@ import { handleGetAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
+import { stripeRoutes } from "./routes/stripe";
 import { getEventBus, startNatsConnection, stopNatsConnection } from "./event-bus/client";
 import { TraceStreamListener } from "./event-bus/listener";
 
@@ -19,6 +20,8 @@ const app = new Hono();
 
 app.onError(errorHandler);
 app.use("*", logger);
+
+
 
 app.get("/health", (c) => {
   return c.json({ status: "ok", service: "pulse" });
@@ -36,15 +39,6 @@ app.use(
   })
 );
 
-// Better-Auth exposes this route by default
-app.post("/api/auth/sign-up/email", (c) => {
-  return c.json({ error: "Use /dashboard/api/signup for account creation" }, 403);
-});
-
-app.on(["POST", "GET"], "/api/auth/*", (c) => {
-  return auth.handler(c.req.raw);
-});
-
 app.use(
   "/dashboard/api/*",
   cors({
@@ -55,8 +49,31 @@ app.use(
   })
 );
 
+app.use(
+  "/dashboard/api/stripe/*",
+  cors({
+    origin: env.FRONTEND_URL,
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    credentials: true,
+  })
+);
+
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+  return auth.handler(c.req.raw);
+});
+
+
+// Better-Auth exposes this route by default
+app.post("/api/auth/sign-up/email", (c) => {
+  return c.json({ error: "Use /dashboard/api/signup for account creation" }, 403);
+});
+
+
+
 app.post("/dashboard/api/signup", handleSignupWithProject);
 app.route("/dashboard/api", dashboard);
+app.route("/dashboard/api/stripe", stripeRoutes);
 
 app.post("/v1/auth/login", isAuthenticated);
 

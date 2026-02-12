@@ -54,6 +54,9 @@ services:
       ADMIN_KEY: dev-admin-key
       BETTER_AUTH_SECRET: dev-secret-key-at-least-32-characters-long-for-signing
       BETTER_AUTH_URL: http://localhost:3000
+      STRIPE_SECRET_KEY: sk_live_5....
+      STRIPE_WEBHOOK_SECRET: whsec_test_webhook_secret
+      FRONTEND_URL: http://localhost:5173
     depends_on:
       postgres:
         condition: service_healthy

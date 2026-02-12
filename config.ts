@@ -10,6 +10,9 @@ const envSchema = z.object({
   BETTER_AUTH_URL: z.string().default("http://localhost:3000"),
   TRACE_STREAM_NAME: z.string().default("TRACE_STREAM"),
   TRACE_CONSUMER_DURABLE: z.string().default("trace-stream-consumer"),
+  STRIPE_SECRET_KEY: z.string(),
+  STRIPE_WEBHOOK_SECRET: z.string(),
+  FRONTEND_URL: z.string().default("http://localhost:5173"),
 });
 
 function parseEnv() {
