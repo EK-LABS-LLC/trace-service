@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 /**
- * Provider schema - accepts any provider string
+ * Provider schema - accepts only specific provider values
  */
-export const providerSchema = z.string().min(1).max(50);
+export const providerSchema = z.enum(["openai", "anthropic", "openrouter"]);
 
 /**
  * Status enum for trace status
