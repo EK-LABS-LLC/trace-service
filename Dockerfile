@@ -32,6 +32,7 @@ COPY --from=builder /app/trace-service/drizzle ./drizzle
 COPY --from=builder /app/trace-service/middleware ./middleware
 COPY --from=builder /app/trace-service/routes ./routes
 COPY --from=builder /app/trace-service/services ./services
+COPY --from=builder /app/trace-service/shared ./shared
 
 # Copy drizzle config for migrations
 COPY --from=builder /app/trace-service/drizzle.config.ts ./
