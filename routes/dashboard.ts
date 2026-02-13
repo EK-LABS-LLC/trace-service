@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { sessionMiddleware } from "../middleware/session";
 import { projectContextMiddleware, requireProjectAdmin } from "../middleware/project-context";
-import { handleGetApiKeys, handleDeleteApiKey } from "./admin";
+import { handleGetApiKeys, handleDeleteApiKey, handleCreateApiKey, handleUpdateApiKey } from "./admin";
 import { handleGetProjects, handleCreateProjectForCurrentUser } from "./dashboard-projects";
 import { handleGetProjectUsers, handleCreateProjectUser } from "./dashboard-users";
 import { handleBatchTraces, getTraces, getTraceById } from "./traces";
@@ -15,6 +15,8 @@ dashboard.use("*", sessionMiddleware);
 dashboard.get("/projects", handleGetProjects);
 dashboard.post("/projects", handleCreateProjectForCurrentUser);
 dashboard.get("/api-keys", projectContextMiddleware, requireProjectAdmin, handleGetApiKeys);
+dashboard.post("/api-keys", projectContextMiddleware, requireProjectAdmin, handleCreateApiKey);
+dashboard.patch("/api-keys/:id", projectContextMiddleware, requireProjectAdmin, handleUpdateApiKey);
 dashboard.delete(
   "/api-keys/:id",
   projectContextMiddleware,

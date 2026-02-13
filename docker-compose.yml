@@ -57,6 +57,7 @@ services:
       STRIPE_SECRET_KEY: sk_live_5....
       STRIPE_WEBHOOK_SECRET: whsec_test_webhook_secret
       FRONTEND_URL: http://localhost:5173
+      ENCRYPTION_KEY: 8d2a52c8333cabd7d3e49fd6a60da5574f5722d64fc4a2b211390a1634553a03
     depends_on:
       postgres:
         condition: service_healthy

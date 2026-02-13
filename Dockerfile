@@ -6,7 +6,7 @@ WORKDIR /app
 # Copy trace-service package files
 COPY trace-service/package.json trace-service/bun.lock* ./trace-service/
 
-# Install dependencies
+# Install dependencies (including drizzle-kit for migrations)
 WORKDIR /app/trace-service
 RUN bun install
 
@@ -33,6 +33,7 @@ COPY --from=builder /app/trace-service/middleware ./middleware
 COPY --from=builder /app/trace-service/routes ./routes
 COPY --from=builder /app/trace-service/services ./services
 COPY --from=builder /app/trace-service/shared ./shared
+COPY --from=builder /app/trace-service/lib ./lib
 
 # Copy drizzle config for migrations
 COPY --from=builder /app/trace-service/drizzle.config.ts ./

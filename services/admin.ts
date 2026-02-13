@@ -5,6 +5,7 @@ import type { ProjectRole } from "../db/schema";
 import { projects, apiKeys, userProjects } from "../db/schema";
 import { hashApiKey } from "../auth/queries";
 import { normalizeProjectRole } from "./project-roles";
+import { encryptApiKey, decryptApiKey } from "../lib/crypto";
 
 /**
  * Result returned when a project is created.
@@ -22,6 +23,9 @@ export interface ApiKeyInfo {
   id: string;
   projectId: string;
   projectName: string;
+  key: string; // Decrypted API key
+  name: string;
+  lastUsedAt?: string;
   createdAt: string;
 }
 
@@ -50,12 +54,15 @@ export async function createProject(name: string, db: Database): Promise<CreateP
   return db.transaction(async (tx) => {
     const apiKey = generateApiKey();
     const keyHash = hashApiKey(apiKey);
+    const encryptedKey = encryptApiKey(apiKey);
 
     const [project] = await tx.insert(projects).values({ name }).returning();
 
     await tx.insert(apiKeys).values({
       projectId: project!.id,
       keyHash,
+      encryptedKey,
+      name: "Default Key",
     });
 
     return {
@@ -77,12 +84,15 @@ export async function createProjectForUser(
   return db.transaction(async (tx) => {
     const apiKey = generateApiKey();
     const keyHash = hashApiKey(apiKey);
+    const encryptedKey = encryptApiKey(apiKey);
 
     const [project] = await tx.insert(projects).values({ name }).returning();
 
     await tx.insert(apiKeys).values({
       projectId: project!.id,
       keyHash,
+      encryptedKey,
+      name: "Default Key",
     });
 
     await tx.insert(userProjects).values({
@@ -125,7 +135,7 @@ export async function getUserProjects(userId: string, db: Database): Promise<Use
  *
  * @param projectId - The project ID to get keys for
  * @param db - Drizzle database instance
- * @returns List of API keys (without the actual key values, which are hashed)
+ * @returns List of API keys with decrypted values
  */
 export async function getApiKeys(projectId: string, db: Database): Promise<ApiKeyInfo[]> {
   const keys = await db
@@ -133,6 +143,9 @@ export async function getApiKeys(projectId: string, db: Database): Promise<ApiKe
       id: apiKeys.id,
       projectId: apiKeys.projectId,
       projectName: projects.name,
+      encryptedKey: apiKeys.encryptedKey,
+      name: apiKeys.name,
+      lastUsedAt: apiKeys.lastUsedAt,
       createdAt: apiKeys.createdAt,
     })
     .from(apiKeys)
@@ -143,6 +156,9 @@ export async function getApiKeys(projectId: string, db: Database): Promise<ApiKe
     id: k.id,
     projectId: k.projectId,
     projectName: k.projectName,
+    key: decryptApiKey(k.encryptedKey),
+    name: k.name,
+    lastUsedAt: k.lastUsedAt?.toISOString(),
     createdAt: k.createdAt.toISOString(),
   }));
 }
@@ -162,6 +178,57 @@ export async function deleteApiKey(
 ): Promise<boolean> {
   const result = await db
     .delete(apiKeys)
+    .where(and(eq(apiKeys.id, keyId), eq(apiKeys.projectId, projectId)))
+    .returning();
+
+  return result.length > 0;
+}
+
+/**
+ * Create a new API key for an existing project.
+ *
+ * @param projectId - The project ID
+ * @param name - Optional name for the key
+ * @param db - Drizzle database instance
+ * @returns The created API key (plaintext)
+ */
+export async function createApiKey(
+  projectId: string,
+  name: string,
+  db: Database
+): Promise<string> {
+  const apiKey = generateApiKey();
+  const keyHash = hashApiKey(apiKey);
+  const encryptedKey = encryptApiKey(apiKey);
+
+  await db.insert(apiKeys).values({
+    projectId,
+    keyHash,
+    encryptedKey,
+    name: name || "API Key",
+  });
+
+  return apiKey;
+}
+
+/**
+ * Update API key name.
+ *
+ * @param keyId - The API key ID
+ * @param projectId - The project ID (for authorization check)
+ * @param name - The new name
+ * @param db - Drizzle database instance
+ * @returns true if updated, false if not found
+ */
+export async function updateApiKeyName(
+  keyId: string,
+  projectId: string,
+  name: string,
+  db: Database
+): Promise<boolean> {
+  const result = await db
+    .update(apiKeys)
+    .set({ name })
     .where(and(eq(apiKeys.id, keyId), eq(apiKeys.projectId, projectId)))
     .returning();
 

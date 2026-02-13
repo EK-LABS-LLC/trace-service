@@ -1,5 +1,5 @@
 {
-  "id": "b2fa727c-f695-4f97-ba4c-fc006aba7636",
+  "id": "290d7eae-3a6a-4bf2-9e07-0083abd791ad",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -26,6 +26,25 @@
           "type": "varchar(255)",
           "primaryKey": false,
           "notNull": true
+        },
+        "encrypted_key": {
+          "name": "encrypted_key",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'Default Key'"
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

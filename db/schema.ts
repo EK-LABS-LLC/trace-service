@@ -29,6 +29,9 @@ export const apiKeys = pgTable("api_keys", {
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
   keyHash: varchar("key_hash", { length: 255 }).notNull(),
+  encryptedKey: varchar("encrypted_key", { length: 512 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull().default("Default Key"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

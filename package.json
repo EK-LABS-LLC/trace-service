@@ -10,6 +10,8 @@
     "db:push": "bunx drizzle-kit push",
     "db:studio": "bunx drizzle-kit studio",
     "db:seed": "bun run scripts/seed.ts",
+    "db:reset": "bun run scripts/reset.ts",
+    "db:snapshot": "bunx drizzle-kit generate",
     "test": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",
     "format": "bunx prettier --config ../.prettierrc --ignore-path ../.prettierignore --write \"**/*.{ts,tsx,js,json}\""

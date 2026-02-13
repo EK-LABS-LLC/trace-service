@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { createProject, getApiKeys, deleteApiKey } from "../services/admin";
+import { createProject, getApiKeys, deleteApiKey, createApiKey, updateApiKeyName } from "../services/admin";
 import { db } from "../db";
 
 /**
@@ -52,4 +52,54 @@ export async function handleDeleteApiKey(c: Context): Promise<Response> {
   }
 
   return c.json({ success: true });
+}
+
+/**
+ * Handler for POST /admin/api-keys
+ * Creates a new API key for the current project.
+ */
+export async function handleCreateApiKey(c: Context): Promise<Response> {
+  const projectId = c.get("projectId") as string;
+
+  try {
+    const body = await c.req.json<{ name?: string }>();
+    const name = body?.name || "API Key";
+
+    const apiKey = await createApiKey(projectId, name, db);
+
+    return c.json({ apiKey }, 201);
+  } catch {
+    return c.json({ error: "Invalid request body" }, 400);
+  }
+}
+
+/**
+ * Handler for PATCH /admin/api-keys/:id
+ * Updates an API key's name.
+ */
+export async function handleUpdateApiKey(c: Context): Promise<Response> {
+  const keyId = c.req.param("id");
+  const projectId = c.get("projectId") as string;
+
+  if (!keyId) {
+    return c.json({ error: "Missing key ID" }, 400);
+  }
+
+  try {
+    const body = await c.req.json<{ name: string }>();
+
+    if (!body.name || typeof body.name !== "string") {
+      return c.json({ error: "Missing or invalid 'name' field" }, 400);
+    }
+
+    const updated = await updateApiKeyName(keyId, projectId, body.name, db);
+
+    if (!updated) {
+      return c.json({ error: "API key not found" }, 404);
+    }
+
+    return c.json({ success: true });
+  } catch {
+    return c.json({ error: "Invalid request body" }, 400);
+  }
 }

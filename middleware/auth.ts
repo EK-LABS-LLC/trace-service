@@ -21,6 +21,7 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   const token = extractBearerToken(authHeader);
 
   if (!token) {
+    console.error(`[auth] FAILED - Missing or invalid Authorization header - ${c.req.method} ${c.req.path}`);
     return c.json({ error: "Missing or invalid Authorization header" }, 401);
   }
 
@@ -28,9 +29,11 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   const projectId = await getProjectIdByKeyHash(keyHash, db);
 
   if (!projectId) {
+    console.error(`[auth] FAILED - Invalid API key - ${c.req.method} ${c.req.path} - token=${token.slice(0, 10)}...`);
     return c.json({ error: "Invalid API key" }, 401);
   }
 
+  console.log(`[auth] SUCCESS - ${c.req.method} ${c.req.path} - project=${projectId}`);
   c.set("projectId", projectId);
   await next();
 }

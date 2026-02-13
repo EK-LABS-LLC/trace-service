@@ -14,20 +14,26 @@ import { buildTraceIngestSubject } from "../event-bus/subjects";
 export async function handleBatchTraces(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
 
+  console.log(`[traces] POST /v1/traces/batch - project=${projectId}`);
+
   let body: unknown;
   try {
     body = await c.req.json();
   } catch {
+    console.error(`[traces] POST /v1/traces/batch - Invalid JSON body - project=${projectId}`);
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
   try {
     const result = await ingestTraces(projectId, body, storage);
+    console.log(`[traces] POST /v1/traces/batch - SUCCESS - project=${projectId}, ingested=${result.ingested}, skipped=${result.skipped}`);
     return c.json(result, 202);
   } catch (err) {
     if (err instanceof ZodError) {
+      console.error(`[traces] POST /v1/traces/batch - Validation failed - project=${projectId}, errors=${JSON.stringify(err.issues)}`);
       return c.json({ error: "Validation failed", details: err.issues }, 400);
     }
+    console.error(`[traces] POST /v1/traces/batch - ERROR - project=${projectId}`, err);
     throw err;
   }
 }
@@ -39,10 +45,13 @@ export async function handleBatchTraces(c: Context): Promise<Response> {
 export async function handleAsyncTrace(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
 
+  console.log(`[traces] POST /v1/traces/async - project=${projectId}`);
+
   let payload: unknown;
   try {
     payload = await c.req.json();
   } catch {
+    console.error(`[traces] POST /v1/traces/async - Invalid JSON body - project=${projectId}`);
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
@@ -51,6 +60,7 @@ export async function handleAsyncTrace(c: Context): Promise<Response> {
     traces = batchTraceSchema.parse(payload);
   } catch (err) {
     if (err instanceof ZodError) {
+      console.error(`[traces] POST /v1/traces/async - Validation failed - project=${projectId}, errors=${JSON.stringify(err.issues)}`);
       return c.json({ error: "Validation failed", details: err.issues }, 400);
     }
     throw err;
@@ -61,9 +71,10 @@ export async function handleAsyncTrace(c: Context): Promise<Response> {
       projectId,
       traces,
     });
+    console.log(`[traces] POST /v1/traces/async - SUCCESS - project=${projectId}, queued=${traces.length}`);
     return c.json({ status: "queued", count: traces.length }, 202);
   } catch (err) {
-    console.error("Failed to publish trace event", err);
+    console.error(`[traces] POST /v1/traces/async - Failed to publish - project=${projectId}, count=${traces.length}`, err);
     return c.json({ error: "Failed to enqueue trace" }, 503);
   }
 }
@@ -74,13 +85,16 @@ export async function handleAsyncTrace(c: Context): Promise<Response> {
  */
 export async function getTraces(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
-
   const rawQuery = c.req.query();
+
+  console.log(`[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`);
+
   let params;
   try {
     params = traceQuerySchema.parse(rawQuery);
   } catch (err) {
     if (err instanceof ZodError) {
+      console.error(`[traces] GET /v1/traces - Invalid query params - project=${projectId}, errors=${JSON.stringify(err.issues)}`);
       return c.json({ error: "Invalid query parameters", details: err.issues }, 400);
     }
     throw err;
@@ -141,6 +155,7 @@ export async function getTraces(c: Context): Promise<Response> {
   };
 
   const result = await queryTraces(projectId, filters, storage);
+  console.log(`[traces] GET /v1/traces - SUCCESS - project=${projectId}, returned=${result.traces.length}, total=${result.total}`);
   return c.json(result, 200);
 }
 
@@ -152,11 +167,15 @@ export async function getTraceById(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
   const traceId = c.req.param("id");
 
+  console.log(`[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`);
+
   const trace = await getTrace(traceId, projectId, storage);
 
   if (!trace) {
+    console.warn(`[traces] GET /v1/traces/:id - NOT FOUND - project=${projectId}, trace_id=${traceId}`);
     return c.json({ error: "Trace not found" }, 404);
   }
 
+  console.log(`[traces] GET /v1/traces/:id - SUCCESS - project=${projectId}, trace_id=${traceId}, status=${trace.status}, provider=${trace.provider}`);
   return c.json(trace, 200);
 }

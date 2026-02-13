@@ -2,6 +2,9 @@ CREATE TABLE "api_keys" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"project_id" uuid NOT NULL,
 	"key_hash" varchar(255) NOT NULL,
+	"encrypted_key" varchar(512) NOT NULL,
+	"name" varchar(255) DEFAULT 'Default Key' NOT NULL,
+	"last_used_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

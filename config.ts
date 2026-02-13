@@ -13,6 +13,7 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string(),
   STRIPE_WEBHOOK_SECRET: z.string(),
   FRONTEND_URL: z.string().default("http://localhost:5173"),
+  ENCRYPTION_KEY: z.string().min(32, "ENCRYPTION_KEY must be at least 32 characters"),
 });
 
 function parseEnv() {
