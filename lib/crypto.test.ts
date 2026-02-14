@@ -1,13 +1,8 @@
 import { describe, test, expect, beforeAll } from "bun:test";
 import { encryptApiKey, decryptApiKey } from "./crypto";
-import { drizzle } from "drizzle-orm/bun-postgres";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { apiKeys, projects } from "../db/schema";
-import { sql } from "drizzle-orm";
 
 describe("API Key Encryption", () => {
   beforeAll(() => {
-    // Set encryption key for tests
     process.env.ENCRYPTION_KEY = "test-encryption-key-32-chars-long-for-testing";
   });
 
@@ -48,11 +43,9 @@ describe("API Key Encryption", () => {
   test("different encryption keys cannot decrypt", () => {
     const original = "pulse_sk_test-api-key-12345";
 
-    // Encrypt with one key
     process.env.ENCRYPTION_KEY = "key-one-32-characters-long-for-test";
     const encrypted = encryptApiKey(original);
 
-    // Try to decrypt with different key
     process.env.ENCRYPTION_KEY = "key-two-32-characters-long-for-test";
     expect(() => decryptApiKey(encrypted)).toThrow();
   });
