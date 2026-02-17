@@ -19,8 +19,8 @@ import {
   handleCreateProjectUser,
 } from "./dashboard-users";
 import { handleBatchTraces, getTraces, getTraceById } from "./traces";
-import { handleGetSessionTraces } from "./sessions";
-import { handleGetAnalytics } from "./analytics";
+import { handleGetSessionTraces, handleGetSessionSpans } from "./sessions";
+import { handleGetAnalytics, handleGetSpanAnalytics } from "./analytics";
 import {
   handleBatchSpans,
   handleAsyncSpan,
@@ -78,7 +78,17 @@ dashboard.get(
   projectContextMiddleware,
   handleGetSessionTraces,
 );
+dashboard.get(
+  "/sessions/:id/spans",
+  projectContextMiddleware,
+  handleGetSessionSpans,
+);
 dashboard.get("/analytics", projectContextMiddleware, handleGetAnalytics);
+dashboard.get(
+  "/analytics/spans",
+  projectContextMiddleware,
+  handleGetSpanAnalytics,
+);
 dashboard.post("/spans/batch", projectContextMiddleware, handleBatchSpans);
 dashboard.post("/spans/async", projectContextMiddleware, handleAsyncSpan);
 dashboard.get("/spans", projectContextMiddleware, getSpans);

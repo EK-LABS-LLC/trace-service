@@ -169,6 +169,17 @@ export class PostgresStorage implements StorageAdapter {
       .orderBy(sql`${traces.timestamp} ASC`);
   }
 
+  async getSessionSpans(
+    sessionId: string,
+    projectId: string,
+  ): Promise<Span[]> {
+    return this.db
+      .select()
+      .from(spans)
+      .where(and(eq(spans.sessionId, sessionId), eq(spans.projectId, projectId)))
+      .orderBy(sql`${spans.timestamp} ASC`);
+  }
+
   async insertSpan(projectId: string, span: NewSpan): Promise<Span> {
     const result = await this.db
       .insert(spans)

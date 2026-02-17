@@ -1,5 +1,5 @@
 import type { StorageAdapter } from "../db/adapter";
-import type { Trace } from "../db/schema";
+import type { Trace, Span } from "../db/schema";
 
 /**
  * Result of a session traces query.
@@ -7,6 +7,11 @@ import type { Trace } from "../db/schema";
 export interface SessionTracesResult {
   sessionId: string;
   traces: Trace[];
+}
+
+export interface SessionSpansResult {
+  sessionId: string;
+  spans: Span[];
 }
 
 /**
@@ -23,5 +28,18 @@ export async function getSessionTraces(
   return {
     sessionId,
     traces,
+  };
+}
+
+export async function getSessionSpans(
+  sessionId: string,
+  projectId: string,
+  storage: StorageAdapter,
+): Promise<SessionSpansResult> {
+  const spans = await storage.getSessionSpans(sessionId, projectId);
+
+  return {
+    sessionId,
+    spans,
   };
 }

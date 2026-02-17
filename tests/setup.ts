@@ -212,6 +212,65 @@ export async function createTestTraces(
 }
 
 /**
+ * Create test spans for a project
+ */
+export async function createTestSpans(
+  projectId: string,
+  count: number = 10,
+  sessionId?: string,
+): Promise<string[]> {
+  const apiKey = projectApiKeys.get(projectId);
+  if (!apiKey) {
+    throw new Error(`No API key found for project ${projectId}`);
+  }
+
+  const sid = sessionId ?? crypto.randomUUID();
+  const spans = Array.from({ length: count }, (_, i) => {
+    const kind =
+      i % 5 === 0
+        ? "session"
+        : i % 2 === 0
+          ? "tool_use"
+          : "agent_run";
+    const isError = i === 0;
+
+    return {
+      span_id: crypto.randomUUID(),
+      session_id: sid,
+      timestamp: new Date(Date.now() - i * 60000).toISOString(),
+      duration_ms: 100 + i * 10,
+      source: "claude_code" as const,
+      kind,
+      event_type:
+        kind === "tool_use"
+          ? "post_tool_use"
+          : kind === "agent_run"
+            ? "subagent_stop"
+            : "session_update",
+      status: isError ? ("error" as const) : ("success" as const),
+      tool_name: kind === "tool_use" ? "Bash" : undefined,
+      agent_name: kind === "agent_run" ? "Plan" : undefined,
+      metadata: { i },
+    };
+  });
+
+  const ingestResponse = await authFetch("/v1/spans/batch", apiKey, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(spans),
+  });
+
+  if (!ingestResponse.ok) {
+    const text = await ingestResponse.text();
+    throw new Error(
+      `Failed to ingest test spans (${ingestResponse.status}): ${text}`,
+    );
+  }
+
+  return spans.map((s) => s.span_id);
+}
+
+/**
  * Clean up all test data
  */
 export async function cleanupTestData(): Promise<void> {

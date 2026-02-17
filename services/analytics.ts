@@ -1,5 +1,5 @@
 import type { Database } from "../db/index";
-import type { GroupBy } from "../shared/validation";
+import type { GroupBy, SpanAnalyticsGroupBy } from "../shared/validation";
 import {
   getTotalCost,
   getTotalTokens,
@@ -11,9 +11,21 @@ import {
   getCostByProvider,
   getStatsByModel,
   getCostOverTimeByProvider,
+  getTotalSpanEvents,
+  getSpanErrorRate,
+  getAvgSpanDuration,
+  getSpanCountsByKind,
+  getSpanCountsBySource,
+  getSpanCountsOverTime,
+  getAvgSessionSpanDuration,
+  getTopTools,
   type CostByProvider,
   type StatsByModel,
   type CostOverTimeByProvider,
+  type SpanCountByKind,
+  type SpanCountBySource,
+  type SpanCountOverTime,
+  type TopToolUsage,
 } from "../db/analytics";
 
 /**
@@ -54,6 +66,20 @@ export interface AnalyticsResult {
   costByProvider: CostByProvider[];
   topModels: StatsByModel[];
   computed: ComputedMetrics;
+}
+
+export interface SpanAnalyticsResult {
+  agentRuns: number;
+  toolCalls: number;
+  avgSessionDurationMs: number;
+  successRate: number;
+  topTools: TopToolUsage[];
+  totalSpans: number;
+  errorRate: number;
+  avgDurationMs: number;
+  spansByKind: SpanCountByKind[];
+  spansBySource: SpanCountBySource[];
+  spansOverTime: SpanCountOverTime[];
 }
 
 /**
@@ -151,5 +177,57 @@ export async function getAnalytics(
     costByProvider,
     topModels,
     computed,
+  };
+}
+
+export async function getSpanAnalytics(
+  projectId: string,
+  dateRange: AnalyticsDateRange,
+  db: Database,
+  groupBy: SpanAnalyticsGroupBy = "day",
+): Promise<SpanAnalyticsResult> {
+  const dbDateRange = {
+    dateFrom: dateRange.dateFrom,
+    dateTo: dateRange.dateTo,
+  };
+
+  const [
+    totalSpans,
+    errorRate,
+    avgDurationMs,
+    spansByKind,
+    spansBySource,
+    spansOverTime,
+    avgSessionDurationMs,
+    topTools,
+  ] =
+    await Promise.all([
+      getTotalSpanEvents(db, projectId, dbDateRange),
+      getSpanErrorRate(db, projectId, dbDateRange),
+      getAvgSpanDuration(db, projectId, dbDateRange),
+      getSpanCountsByKind(db, projectId, dbDateRange),
+      getSpanCountsBySource(db, projectId, dbDateRange),
+      getSpanCountsOverTime(db, projectId, dbDateRange, groupBy),
+      getAvgSessionSpanDuration(db, projectId, dbDateRange),
+      getTopTools(db, projectId, dbDateRange),
+    ]);
+
+  const byKind = new Map(spansByKind.map((row) => [row.kind, row.count]));
+  const agentRuns = byKind.get("agent_run") ?? 0;
+  const toolCalls = byKind.get("tool_use") ?? 0;
+  const successRate = totalSpans === 0 ? 0 : 100 - errorRate;
+
+  return {
+    agentRuns,
+    toolCalls,
+    avgSessionDurationMs,
+    successRate,
+    topTools,
+    totalSpans,
+    errorRate,
+    avgDurationMs,
+    spansByKind,
+    spansBySource,
+    spansOverTime,
   };
 }

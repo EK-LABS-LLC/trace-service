@@ -67,6 +67,14 @@ export const analyticsQuerySchema = z.object({
   group_by: groupBySchema.optional(),
 });
 
+export const spanAnalyticsGroupBySchema = z.enum(["day", "hour"]);
+
+export const spanAnalyticsQuerySchema = z.object({
+  date_from: z.string().datetime({ offset: true }),
+  date_to: z.string().datetime({ offset: true }),
+  group_by: spanAnalyticsGroupBySchema.optional(),
+});
+
 /**
  * Source identifies which CLI tool produced the span.
  */
@@ -195,6 +203,8 @@ export type BatchTraceInput = z.infer<typeof batchTraceSchema>;
 export type TraceQueryParams = z.infer<typeof traceQuerySchema>;
 export type GroupBy = z.infer<typeof groupBySchema>;
 export type AnalyticsQueryParams = z.infer<typeof analyticsQuerySchema>;
+export type SpanAnalyticsGroupBy = z.infer<typeof spanAnalyticsGroupBySchema>;
+export type SpanAnalyticsQueryParams = z.infer<typeof spanAnalyticsQuerySchema>;
 
 export type SpanSource = z.infer<typeof spanSourceSchema>;
 export type SpanKind = z.infer<typeof spanKindSchema>;

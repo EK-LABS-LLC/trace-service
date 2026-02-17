@@ -18,8 +18,8 @@ import {
   getSpans,
   getSpanById,
 } from "./routes/spans";
-import { handleGetSessionTraces } from "./routes/sessions";
-import { handleGetAnalytics } from "./routes/analytics";
+import { handleGetSessionTraces, handleGetSessionSpans } from "./routes/sessions";
+import { handleGetAnalytics, handleGetSpanAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
@@ -102,7 +102,9 @@ app.post("/v1/spans/async", authMiddleware, handleAsyncSpan);
 app.get("/v1/spans", authMiddleware, getSpans);
 app.get("/v1/spans/:id", authMiddleware, getSpanById);
 app.get("/v1/sessions/:id", authMiddleware, handleGetSessionTraces);
+app.get("/v1/sessions/:id/spans", authMiddleware, handleGetSessionSpans);
 app.get("/v1/analytics", authMiddleware, handleGetAnalytics);
+app.get("/v1/analytics/spans", authMiddleware, handleGetSpanAnalytics);
 
 const server = Bun.serve({
   fetch: app.fetch,

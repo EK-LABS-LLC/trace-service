@@ -109,6 +109,11 @@ export interface StorageAdapter {
   getSessionTraces(sessionId: string, projectId: string): Promise<Trace[]>;
 
   /**
+   * Get all spans for a session, ordered by timestamp ascending.
+   */
+  getSessionSpans(sessionId: string, projectId: string): Promise<Span[]>;
+
+  /**
    * Insert a new span into storage.
    */
   insertSpan(projectId: string, span: NewSpan): Promise<Span>;

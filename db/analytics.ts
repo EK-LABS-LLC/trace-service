@@ -11,8 +11,8 @@ import {
   desc,
 } from "drizzle-orm";
 import type { Database } from "./index";
-import { traces } from "./schema";
-import type { GroupBy } from "../shared/validation";
+import { traces, spans } from "./schema";
+import type { GroupBy, SpanAnalyticsGroupBy } from "../shared/validation";
 
 /**
  * Date range filter for analytics queries.
@@ -86,6 +86,14 @@ function buildDateConditions(projectId: string, dateRange: DateRange) {
     eq(traces.projectId, projectId),
     gte(traces.timestamp, dateRange.dateFrom),
     lte(traces.timestamp, dateRange.dateTo),
+  );
+}
+
+function buildSpanDateConditions(projectId: string, dateRange: DateRange) {
+  return and(
+    eq(spans.projectId, projectId),
+    gte(spans.timestamp, dateRange.dateFrom),
+    lte(spans.timestamp, dateRange.dateTo),
   );
 }
 
@@ -372,5 +380,192 @@ export async function getCostOverTimeByProvider(
     period: String(row.period),
     provider: row.provider,
     costCents: Number(row.costCents ?? 0),
+  }));
+}
+
+export interface SpanCountByKind {
+  kind: string;
+  count: number;
+}
+
+export interface SpanCountBySource {
+  source: string;
+  count: number;
+}
+
+export interface SpanCountOverTime {
+  period: string;
+  count: number;
+}
+
+export interface TopToolUsage {
+  name: string;
+  count: number;
+}
+
+export async function getTotalSpanEvents(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const result = await db
+    .select({ total: count() })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange));
+
+  return result[0]?.total ?? 0;
+}
+
+export async function getSpanErrorRate(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const conditions = buildSpanDateConditions(projectId, dateRange);
+
+  const [totalResult, errorResult] = await Promise.all([
+    db.select({ count: count() }).from(spans).where(conditions),
+    db
+      .select({ count: count() })
+      .from(spans)
+      .where(and(conditions, eq(spans.status, "error"))),
+  ]);
+
+  const total = totalResult[0]?.count ?? 0;
+  const errors = errorResult[0]?.count ?? 0;
+  if (total === 0) {
+    return 0;
+  }
+
+  return (errors / total) * 100;
+}
+
+export async function getAvgSpanDuration(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const result = await db
+    .select({ avgDuration: avg(spans.durationMs) })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange));
+
+  return Number(result[0]?.avgDuration ?? 0);
+}
+
+export async function getSpanCountsByKind(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<SpanCountByKind[]> {
+  const result = await db
+    .select({
+      kind: spans.kind,
+      count: count(),
+    })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange))
+    .groupBy(spans.kind)
+    .orderBy(desc(count()));
+
+  return result.map((row) => ({
+    kind: row.kind,
+    count: row.count,
+  }));
+}
+
+export async function getSpanCountsBySource(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<SpanCountBySource[]> {
+  const result = await db
+    .select({
+      source: spans.source,
+      count: count(),
+    })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange))
+    .groupBy(spans.source)
+    .orderBy(desc(count()));
+
+  return result.map((row) => ({
+    source: row.source,
+    count: row.count,
+  }));
+}
+
+export async function getSpanCountsOverTime(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+  groupBy: SpanAnalyticsGroupBy = "day",
+): Promise<SpanCountOverTime[]> {
+  const conditions = buildSpanDateConditions(projectId, dateRange);
+  const periodExpr =
+    groupBy === "hour"
+      ? sql`to_char(date_trunc('hour', ${spans.timestamp}), 'YYYY-MM-DD HH24:00:00')`
+      : sql`to_char(date_trunc('day', ${spans.timestamp}), 'YYYY-MM-DD')`;
+
+  const result = await db
+    .select({
+      period: periodExpr.as("period"),
+      count: count(),
+    })
+    .from(spans)
+    .where(conditions)
+    .groupBy(periodExpr)
+    .orderBy(periodExpr);
+
+  return result.map((row) => ({
+    period: String(row.period),
+    count: row.count,
+  }));
+}
+
+export async function getAvgSessionSpanDuration(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const result = await db
+    .select({ avgDuration: avg(spans.durationMs) })
+    .from(spans)
+    .where(
+      and(
+        buildSpanDateConditions(projectId, dateRange),
+        eq(spans.kind, "session"),
+      ),
+    );
+
+  return Number(result[0]?.avgDuration ?? 0);
+}
+
+export async function getTopTools(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+  limit: number = 5,
+): Promise<TopToolUsage[]> {
+  const result = await db
+    .select({
+      name: spans.toolName,
+      count: count(),
+    })
+    .from(spans)
+    .where(
+      and(
+        buildSpanDateConditions(projectId, dateRange),
+        eq(spans.kind, "tool_use"),
+        isNotNull(spans.toolName),
+      ),
+    )
+    .groupBy(spans.toolName)
+    .orderBy(desc(count()))
+    .limit(limit);
+
+  return result.map((row) => ({
+    name: row.name ?? "unknown",
+    count: row.count,
   }));
 }

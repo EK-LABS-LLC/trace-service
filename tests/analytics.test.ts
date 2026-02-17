@@ -3,6 +3,7 @@ import {
   authFetch,
   createTestProject,
   createTestTraces,
+  createTestSpans,
   cleanupTestData,
 } from "./setup";
 import type { CostDataPoint } from "../db/analytics";
@@ -16,6 +17,8 @@ describe("Analytics Endpoint", () => {
     console.log(`[analytics.test] Created project: ${testProject.id}`);
     await createTestTraces(testProject.id, 20);
     console.log("[analytics.test] Created 20 test traces");
+    await createTestSpans(testProject.id, 30);
+    console.log("[analytics.test] Created 30 test spans");
   });
 
   afterAll(async () => {
@@ -149,6 +152,43 @@ describe("Analytics Endpoint", () => {
 
       expect(response.status).toBe(200);
       expect(data.costOverTime).toBeInstanceOf(Array);
+    });
+  });
+
+  describe("GET /v1/analytics/spans", () => {
+    const dateFrom = "2020-01-01T00:00:00Z";
+    const dateTo = "2030-12-31T23:59:59Z";
+
+    test("returns span analytics data with dashboard metrics", async () => {
+      const response = await authFetch(
+        `/v1/analytics/spans?date_from=${dateFrom}&date_to=${dateTo}`,
+        testProject.apiKey,
+      );
+      const data = (await response.json()) as {
+        agentRuns: number;
+        toolCalls: number;
+        avgSessionDurationMs: number;
+        successRate: number;
+        topTools: Array<{ name: string; count: number }>;
+        totalSpans: number;
+      };
+
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty("agentRuns");
+      expect(data).toHaveProperty("toolCalls");
+      expect(data).toHaveProperty("avgSessionDurationMs");
+      expect(data).toHaveProperty("successRate");
+      expect(data).toHaveProperty("topTools");
+      expect(data).toHaveProperty("totalSpans");
+      expect(data.totalSpans).toBeGreaterThanOrEqual(30);
+      expect(data.successRate).toBeGreaterThanOrEqual(0);
+      expect(data.successRate).toBeLessThanOrEqual(100);
+      expect(Array.isArray(data.topTools)).toBe(true);
+    });
+
+    test("requires date range for span analytics", async () => {
+      const response = await authFetch("/v1/analytics/spans", testProject.apiKey);
+      expect(response.status).toBe(400);
     });
   });
 });
