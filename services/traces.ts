@@ -61,6 +61,10 @@ export async function ingestTraces(
   return ingestTraceBatch(projectId, parsed, storage);
 }
 
+/**
+ * Ingest a batch of traces (synchronous, non-idempotent).
+ * Uses regular insertTrace - will fail on duplicates.
+ */
 export async function ingestTraceBatch(
   projectId: string,
   traces: TraceInput[],
@@ -81,6 +85,40 @@ export async function ingestTraceBatch(
   for (const traceInput of traces) {
     const newTrace = toNewTrace(traceInput, projectId);
     const inserted = await storage.insertTrace(projectId, newTrace);
+    insertedTraces.push(inserted);
+  }
+
+  return {
+    count: insertedTraces.length,
+    traces: insertedTraces,
+  };
+}
+
+/**
+ * Ingest a batch of traces idempotently.
+ * Uses insertTraceIdempotent - skips duplicates on insert.
+ * Used by WAL processing for crash recovery.
+ */
+export async function ingestTraceBatchIdempotent(
+  projectId: string,
+  traces: TraceInput[],
+  storage: StorageAdapter
+): Promise<IngestResult> {
+  const sessionIds = new Set<string>();
+  for (const trace of traces) {
+    if (trace.session_id) {
+      sessionIds.add(trace.session_id);
+    }
+  }
+
+  for (const sessionId of sessionIds) {
+    await storage.upsertSession(projectId, { id: sessionId, projectId });
+  }
+
+  const insertedTraces: Trace[] = [];
+  for (const traceInput of traces) {
+    const newTrace = toNewTrace(traceInput, projectId);
+    const inserted = await storage.insertTraceIdempotent(projectId, newTrace);
     insertedTraces.push(inserted);
   }
 

@@ -13,8 +13,9 @@ import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
 import { stripeRoutes } from "./routes/stripe";
-import { getEventBus, startNatsConnection, stopNatsConnection } from "./event-bus/client";
+import { startWAL, stopWAL, getWALCheckpoint } from "./event-bus/client";
 import { TraceStreamListener } from "./event-bus/listener";
+import { WALCheckpoint } from "./event-bus/checkpoint";
 
 const app = new Hono();
 
@@ -89,12 +90,23 @@ const server = Bun.serve({
   port: env.PORT,
 });
 
-await startNatsConnection();
+await startWAL();
+
+const walCheckpoint = new WALCheckpoint(env.WAL_DIR);
+await walCheckpoint.load();
 
 const traceListener = new TraceStreamListener(
-  getEventBus(),
-  env.TRACE_STREAM_NAME,
-  env.TRACE_CONSUMER_DURABLE
+  {
+    walDir: env.WAL_DIR,
+    maxSegmentSize: env.WAL_MAX_SEGMENT_SIZE,
+    maxSegmentAge: env.WAL_MAX_SEGMENT_AGE,
+    maxSegmentLines: env.WAL_MAX_SEGMENT_LINES,
+    fsyncEvery: env.WAL_FSYNC_EVERY,
+    maxSegments: env.WAL_MAX_SEGMENTS,
+    maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
+  },
+  walCheckpoint,
+  env.WAL_MAX_RETRIES
 );
 void traceListener.start();
 
@@ -111,7 +123,7 @@ const shutdown = async () => {
   try {
     server.stop();
     traceListener.stop();
-    await stopNatsConnection();
+    await stopWAL();
     await closeDb();
     clearTimeout(shutdownTimeout);
     process.exit(0);

@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { storage } from "../db/postgres";
+import { storage } from "../db/sqlite";
 import { ingestTraces, queryTraces, getTrace } from "../services/traces";
 import { ZodError } from "zod";
 import { traceQuerySchema, batchTraceSchema } from "../shared/validation";
@@ -26,7 +26,7 @@ export async function handleBatchTraces(c: Context): Promise<Response> {
 
   try {
     const result = await ingestTraces(projectId, body, storage);
-    console.log(`[traces] POST /v1/traces/batch - SUCCESS - project=${projectId}, ingested=${result.ingested}, skipped=${result.skipped}`);
+    console.log(`[traces] POST /v1/traces/batch - SUCCESS - project=${projectId}, count=${result.count}`);
     return c.json(result, 202);
   } catch (err) {
     if (err instanceof ZodError) {
@@ -65,6 +65,10 @@ export async function handleAsyncTrace(c: Context): Promise<Response> {
     }
     throw err;
   }
+
+  console.log(
+    `[traces] POST /v1/traces/async - session_ids=${JSON.stringify(traces.map((trace) => trace.session_id))}`
+  );
 
   try {
     await getEventBus().publish(buildTraceIngestSubject(projectId), {

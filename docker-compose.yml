@@ -1,45 +1,4 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: pulse
-      POSTGRES_PASSWORD: pulse
-      POSTGRES_DB: pulse
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  nats:
-    build:
-      context: ./.config/nats
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-    volumes:
-      - ./.config/nats/.config/nats-server.conf:/etc/nats/nats-server.conf:ro
-      - ./.config/nats/.config/streams:/etc/nats/streams:ro
-      - ./.config/nats/.config/consumers:/etc/nats/consumers:ro
-      - ./.config/nats/start-nats.sh:/etc/nats/start-nats.sh:ro
-    environment:
-      NATS_CONFIG: /etc/nats/nats-server.conf
-      NATS_URL: nats://127.0.0.1:4222
-      JETSTREAM_HEALTH: http://127.0.0.1:8222/healthz
-      STREAM_NAME: TRACE_STREAM
-      STREAM_CONFIG: /etc/nats/streams/trace-stream.json
-      CONSUMER_NAME: trace-stream-consumer
-      CONSUMER_CONFIG: /etc/nats/consumers/trace-stream-consumer.json
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz >/dev/null"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   trace-service:
     build:
       context: ..
@@ -47,8 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgres://pulse:pulse@postgres:5432/pulse
-      NATS_URL: nats://nats:4222
+      DATABASE_URL: file:.data/pulse.db
       PORT: 3000
       NODE_ENV: development
       ADMIN_KEY: dev-admin-key
@@ -58,11 +16,5 @@ services:
       STRIPE_WEBHOOK_SECRET: whsec_test_webhook_secret
       FRONTEND_URL: http://localhost:5173
       ENCRYPTION_KEY: 8d2a52c8333cabd7d3e49fd6a60da5574f5722d64fc4a2b211390a1634553a03
-    depends_on:
-      postgres:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-
-volumes:
-  postgres_data:
+    volumes:
+      - ../.data:/app/.data

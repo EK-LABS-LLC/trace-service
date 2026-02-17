@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { storage } from "../db/postgres";
+import { storage } from "../db/sqlite";
 import { getSessionTraces } from "../services/sessions";
 
 /**

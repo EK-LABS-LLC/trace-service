@@ -1,75 +1,69 @@
 import {
-  pgTable,
-  uuid,
-  varchar,
-  timestamp,
-  integer,
-  jsonb,
+  sqliteTable,
   text,
-  real,
+  integer,
   index,
   uniqueIndex,
-  boolean,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
 
 export type ProjectRole = "admin" | "user";
 
-export const projects = pgTable("projects", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  name: varchar("name", { length: 255 }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+export const projects = sqliteTable("projects", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text("name").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow().notNull(),
 });
 
-export const apiKeys = pgTable("api_keys", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  projectId: uuid("project_id")
+export const apiKeys = sqliteTable("api_keys", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  keyHash: varchar("key_hash", { length: 255 }).notNull(),
-  encryptedKey: varchar("encrypted_key", { length: 512 }).notNull(),
-  name: varchar("name", { length: 255 }).notNull().default("Default Key"),
-  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  keyHash: text("key_hash").notNull(),
+  encryptedKey: text("encrypted_key").notNull(),
+  name: text("name").notNull().default("Default Key"),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow().notNull(),
 });
 
-export const sessions = pgTable("sessions", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  projectId: uuid("project_id")
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  metadata: jsonb("metadata"),
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow().notNull(),
+  metadata: text("metadata", { mode: "json" }),
 });
 
-export const traces = pgTable(
+export const traces = sqliteTable(
   "traces",
   {
-    traceId: uuid("trace_id").defaultRandom().primaryKey(),
-    projectId: uuid("project_id")
+    traceId: text("trace_id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
-    sessionId: uuid("session_id").references(() => sessions.id, {
+    sessionId: text("session_id").references(() => sessions.id, {
       onDelete: "set null",
     }),
-    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
+    timestamp: integer("timestamp", { mode: "timestamp" }).defaultNow().notNull(),
     latencyMs: integer("latency_ms").notNull(),
-    provider: varchar("provider", { length: 50 }).notNull(),
-    modelRequested: varchar("model_requested", { length: 255 }).notNull(),
-    modelUsed: varchar("model_used", { length: 255 }),
-    providerRequestId: varchar("provider_request_id", { length: 255 }),
-    requestBody: jsonb("request_body").notNull(),
-    responseBody: jsonb("response_body"),
+    provider: text("provider").notNull(),
+    modelRequested: text("model_requested").notNull(),
+    modelUsed: text("model_used"),
+    providerRequestId: text("provider_request_id"),
+    requestBody: text("request_body", { mode: "json" }).notNull(),
+    responseBody: text("response_body", { mode: "json" }),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
     outputText: text("output_text"),
-    finishReason: varchar("finish_reason", { length: 50 }),
-    status: varchar("status", { length: 20 }).notNull(),
-    error: jsonb("error"),
-    costCents: real("cost_cents"),
-    metadata: jsonb("metadata"),
+    finishReason: text("finish_reason"),
+    status: text("status").notNull(),
+    error: text("error", { mode: "json" }),
+    costCents: integer("cost_cents"), // Store as integer (cents * 100 for precision)
+    metadata: text("metadata", { mode: "json" }),
   },
   (table) => [
     index("traces_project_timestamp_idx").on(table.projectId, table.timestamp),
@@ -86,18 +80,18 @@ export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 
-export const userProjects = pgTable(
+export const userProjects = sqliteTable(
   "user_projects",
   {
-    id: uuid("id").defaultRandom().primaryKey(),
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
     userId: text("user_id")
       .references(() => user.id, { onDelete: "cascade" })
       .notNull(),
-    projectId: uuid("project_id")
+    projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
-    role: varchar("role", { length: 50 }).notNull().default("user"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    role: text("role").notNull().default("user"),
+    createdAt: integer("created_at", { mode: "timestamp" }).defaultNow().notNull(),
   },
   (table) => [
     index("user_projects_user_idx").on(table.userId),
@@ -112,20 +106,20 @@ export type NewUserProject = typeof userProjects.$inferInsert;
 export type Trace = typeof traces.$inferSelect;
 export type NewTrace = typeof traces.$inferInsert;
 
-export const subscriptions = pgTable("subscriptions", {
-  id: uuid("id").defaultRandom().primaryKey(),
+export const subscriptions = sqliteTable("subscriptions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text("user_id")
     .references(() => user.id, { onDelete: "cascade" })
     .notNull(),
-  stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).unique(),
-  stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }).unique(),
-  stripePriceId: varchar("stripe_price_id", { length: 255 }),
-  status: varchar("status", { length: 50 }).notNull(),
-  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
-  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
-  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  stripeSubscriptionId: text("stripe_subscription_id").unique(),
+  stripePriceId: text("stripe_price_id"),
+  status: text("status").notNull(),
+  currentPeriodStart: integer("current_period_start", { mode: "timestamp" }),
+  currentPeriodEnd: integer("current_period_end", { mode: "timestamp" }),
+  cancelAtPeriodEnd: integer("cancel_at_period_end", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).defaultNow().notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).defaultNow().notNull(),
 });
 
 export type Subscription = typeof subscriptions.$inferSelect;

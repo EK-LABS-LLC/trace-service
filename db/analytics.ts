@@ -175,10 +175,12 @@ export async function getCostOverTime(
 ): Promise<CostDataPoint[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
+  // SQLite timestamp is stored as milliseconds since epoch
+  // Use strftime to format dates: %Y-%m-%d %H:00:00 for hour, %Y-%m-%d for day
   let periodExpr: ReturnType<typeof sql>;
   switch (groupBy) {
     case "hour":
-      periodExpr = sql`date_trunc('hour', ${traces.timestamp})`;
+      periodExpr = sql`strftime('%Y-%m-%d %H:00:00', datetime(${traces.timestamp} / 1000, 'unixepoch'))`;
       break;
     case "model":
       periodExpr = sql`${traces.modelRequested}`;
@@ -188,7 +190,7 @@ export async function getCostOverTime(
       break;
     case "day":
     default:
-      periodExpr = sql`date_trunc('day', ${traces.timestamp})`;
+      periodExpr = sql`strftime('%Y-%m-%d', datetime(${traces.timestamp} / 1000, 'unixepoch'))`;
       break;
   }
 
@@ -320,88 +322,7 @@ export async function getStatsByModel(
   }));
 }
 
-/**
- * Get latency distribution in buckets for a project within a date range.
- */
-export async function getLatencyDistribution(
-  db: Database,
-  projectId: string,
-  dateRange: DateRange
-): Promise<LatencyBucket[]> {
-  const conditions = and(buildDateConditions(projectId, dateRange), isNotNull(traces.latencyMs));
 
-  const result = await db
-    .select({
-      bucket: sql<string>`
-        CASE
-          WHEN ${traces.latencyMs} < 200 THEN '0-200'
-          WHEN ${traces.latencyMs} < 400 THEN '200-400'
-          WHEN ${traces.latencyMs} < 600 THEN '400-600'
-          WHEN ${traces.latencyMs} < 800 THEN '600-800'
-          WHEN ${traces.latencyMs} < 1000 THEN '800-1k'
-          WHEN ${traces.latencyMs} < 1500 THEN '1-1.5k'
-          WHEN ${traces.latencyMs} < 2000 THEN '1.5-2k'
-          ELSE '2k+'
-        END
-      `,
-      count: count(),
-    })
-    .from(traces)
-    .where(conditions).groupBy(sql`
-      CASE
-        WHEN ${traces.latencyMs} < 200 THEN '0-200'
-        WHEN ${traces.latencyMs} < 400 THEN '200-400'
-        WHEN ${traces.latencyMs} < 600 THEN '400-600'
-        WHEN ${traces.latencyMs} < 800 THEN '600-800'
-        WHEN ${traces.latencyMs} < 1000 THEN '800-1k'
-        WHEN ${traces.latencyMs} < 1500 THEN '1-1.5k'
-        WHEN ${traces.latencyMs} < 2000 THEN '1.5-2k'
-        ELSE '2k+'
-      END
-    `).orderBy(sql`
-      CASE
-        WHEN ${traces.latencyMs} < 200 THEN 1
-        WHEN ${traces.latencyMs} < 400 THEN 2
-        WHEN ${traces.latencyMs} < 600 THEN 3
-        WHEN ${traces.latencyMs} < 800 THEN 4
-        WHEN ${traces.latencyMs} < 1000 THEN 5
-        WHEN ${traces.latencyMs} < 1500 THEN 6
-        WHEN ${traces.latencyMs} < 2000 THEN 7
-        ELSE 8
-      END
-    `);
-
-  return result.map((row) => ({
-    bucket: row.bucket,
-    count: row.count,
-  }));
-}
-
-/**
- * Get latency percentiles (p50, p95, p99) for a project within a date range.
- */
-export async function getLatencyPercentiles(
-  db: Database,
-  projectId: string,
-  dateRange: DateRange
-): Promise<LatencyPercentiles> {
-  const conditions = and(buildDateConditions(projectId, dateRange), isNotNull(traces.latencyMs));
-
-  const result = await db
-    .select({
-      p50: sql<number>`PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY ${traces.latencyMs})`,
-      p95: sql<number>`PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ${traces.latencyMs})`,
-      p99: sql<number>`PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY ${traces.latencyMs})`,
-    })
-    .from(traces)
-    .where(conditions);
-
-  return {
-    p50: Number(result[0]?.p50 ?? 0),
-    p95: Number(result[0]?.p95 ?? 0),
-    p99: Number(result[0]?.p99 ?? 0),
-  };
-}
 
 /**
  * Get cost over time broken down by provider for a project within a date range.
@@ -415,8 +336,8 @@ export async function getCostOverTimeByProvider(
   const conditions = buildDateConditions(projectId, dateRange);
   const periodExpr =
     groupBy === "hour"
-      ? sql`date_trunc('hour', ${traces.timestamp})`
-      : sql`date_trunc('day', ${traces.timestamp})`;
+      ? sql`strftime('%Y-%m-%d %H:00:00', datetime(${traces.timestamp} / 1000, 'unixepoch'))`
+      : sql`strftime('%Y-%m-%d', datetime(${traces.timestamp} / 1000, 'unixepoch'))`;
 
   const result = await db
     .select({

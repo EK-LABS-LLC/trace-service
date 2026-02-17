@@ -42,6 +42,12 @@ export interface StorageAdapter {
   insertTrace(projectId: string, trace: NewTrace): Promise<Trace>;
 
   /**
+   * Insert a trace idempotently (skip if already exists).
+   * Used by WAL processing for crash recovery.
+   */
+  insertTraceIdempotent(projectId: string, trace: NewTrace): Promise<Trace>;
+
+  /**
    * Get a single trace by ID, scoped to a project.
    * Returns null if not found.
    */
