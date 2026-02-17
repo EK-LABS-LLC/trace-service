@@ -17,7 +17,10 @@ export async function handleGetAnalytics(c: Context): Promise<Response> {
     params = analyticsQuerySchema.parse(rawQuery);
   } catch (err) {
     if (err instanceof ZodError) {
-      return c.json({ error: "Invalid query parameters", details: err.issues }, 400);
+      return c.json(
+        { error: "Invalid query parameters", details: err.issues },
+        400,
+      );
     }
     throw err;
   }

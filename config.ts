@@ -3,14 +3,20 @@ import { z } from "zod";
 const envSchema = z.object({
   DATABASE_URL: z.string().default("file:.data/pulse.db"),
   PORT: z.coerce.number().default(3000),
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
   ADMIN_KEY: z.string().optional(),
-  BETTER_AUTH_SECRET: z.string().min(32, "BETTER_AUTH_SECRET must be at least 32 characters"),
+  BETTER_AUTH_SECRET: z
+    .string()
+    .min(32, "BETTER_AUTH_SECRET must be at least 32 characters"),
   BETTER_AUTH_URL: z.string().default("http://localhost:3000"),
   STRIPE_SECRET_KEY: z.string(),
   STRIPE_WEBHOOK_SECRET: z.string(),
   FRONTEND_URL: z.string().default("http://localhost:5173"),
-  ENCRYPTION_KEY: z.string().min(32, "ENCRYPTION_KEY must be at least 32 characters"),
+  ENCRYPTION_KEY: z
+    .string()
+    .min(32, "ENCRYPTION_KEY must be at least 32 characters"),
 
   // WAL Configuration
   WAL_DIR: z.string().default(".data/wal"),

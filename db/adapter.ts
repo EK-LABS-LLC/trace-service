@@ -56,7 +56,10 @@ export interface StorageAdapter {
   /**
    * Query traces for a project with optional filters and pagination.
    */
-  queryTraces(projectId: string, filters?: TraceQueryFilters): Promise<TraceQueryResult>;
+  queryTraces(
+    projectId: string,
+    filters?: TraceQueryFilters,
+  ): Promise<TraceQueryResult>;
 
   /**
    * Count traces for a project with optional filters.

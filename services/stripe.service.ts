@@ -2,7 +2,10 @@ import Stripe from "stripe";
 import { env } from "../config";
 import { db } from "../db";
 import { user } from "../db/auth-schema";
-import { subscriptions, type Subscription as DbSubscription } from "../db/schema";
+import {
+  subscriptions,
+  type Subscription as DbSubscription,
+} from "../db/schema";
 import { eq } from "drizzle-orm";
 
 export class StripeService {
@@ -12,9 +15,15 @@ export class StripeService {
     this.stripe = new Stripe(env.STRIPE_SECRET_KEY);
   }
 
-  async getOrCreateCustomer(userId: string, userEmail: string): Promise<string> {
-
-    const users = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+  async getOrCreateCustomer(
+    userId: string,
+    userEmail: string,
+  ): Promise<string> {
+    const users = await db
+      .select()
+      .from(user)
+      .where(eq(user.id, userId))
+      .limit(1);
     const userRecord = users[0];
 
     if (!userRecord) {
@@ -29,21 +38,26 @@ export class StripeService {
       });
       customerId = customer.id;
 
-      await db.update(user)
+      await db
+        .update(user)
         .set({ stripeCustomerId: customerId })
         .where(eq(user.id, userId));
     }
     return customerId;
   }
 
-  async createCheckoutSession(userId: string, userEmail: string, priceId: string): Promise<string> {
+  async createCheckoutSession(
+    userId: string,
+    userEmail: string,
+    priceId: string,
+  ): Promise<string> {
     const customerId = await this.getOrCreateCustomer(userId, userEmail);
 
     const checkoutSession = await this.stripe.checkout.sessions.create({
       customer: customerId,
-      payment_method_types: ['card'],
+      payment_method_types: ["card"],
       line_items: [{ price: priceId, quantity: 1 }],
-      mode: 'subscription',
+      mode: "subscription",
       success_url: `${env.FRONTEND_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${env.FRONTEND_URL}/`,
     });
@@ -55,11 +69,11 @@ export class StripeService {
     const event: Stripe.Event = this.stripe.webhooks.constructEvent(
       body,
       signature,
-      env.STRIPE_WEBHOOK_SECRET
+      env.STRIPE_WEBHOOK_SECRET,
     );
 
     switch (event.type) {
-      case 'checkout.session.completed': {
+      case "checkout.session.completed": {
         const sessionData = event.data.object as Stripe.Checkout.Session;
         const userId = sessionData.metadata?.userId;
 
@@ -68,18 +82,22 @@ export class StripeService {
           break;
         }
 
-        const subscriptionId = typeof sessionData.subscription === 'string'
-          ? sessionData.subscription
-          : sessionData.subscription?.id;
-        const customerId = typeof sessionData.customer === 'string'
-          ? sessionData.customer
-          : sessionData.customer?.id;
+        const subscriptionId =
+          typeof sessionData.subscription === "string"
+            ? sessionData.subscription
+            : sessionData.subscription?.id;
+        const customerId =
+          typeof sessionData.customer === "string"
+            ? sessionData.customer
+            : sessionData.customer?.id;
 
         if (!subscriptionId || !customerId) {
           console.error("No subscription or customer ID in session data");
           break;
         }
-        const existing = await db.select().from(subscriptions)
+        const existing = await db
+          .select()
+          .from(subscriptions)
           .where(eq(subscriptions.stripeSubscriptionId, subscriptionId))
           .limit(1);
 
@@ -96,7 +114,7 @@ export class StripeService {
             stripeCustomerId: customerId,
             stripeSubscriptionId: subscriptionId,
             stripePriceId: priceId,
-            status: 'active',
+            status: "active",
             currentPeriodStart: null,
             currentPeriodEnd: null,
             cancelAtPeriodEnd: false,
@@ -104,22 +122,35 @@ export class StripeService {
         }
         break;
       }
-      case 'customer.subscription.created':
-      case 'customer.subscription.updated': {
-        const stripeSubscription: Stripe.Subscription = event.data.object as Stripe.Subscription;
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const stripeSubscription: Stripe.Subscription = event.data
+          .object as Stripe.Subscription;
         const status: string = stripeSubscription.status;
-        const periodStart: Date = new Date((stripeSubscription as any).current_period_start * 1000);
-        const periodEnd: Date = new Date((stripeSubscription as any).current_period_end * 1000);
-        const cancelAtEnd: boolean = (stripeSubscription as any).cancel_at_period_end;
+        const periodStart: Date = new Date(
+          (stripeSubscription as any).current_period_start * 1000,
+        );
+        const periodEnd: Date = new Date(
+          (stripeSubscription as any).current_period_end * 1000,
+        );
+        const cancelAtEnd: boolean = (stripeSubscription as any)
+          .cancel_at_period_end;
         const subscriptionId: string = stripeSubscription.id;
         const customerId: string = stripeSubscription.customer as string;
-        const priceId: string = stripeSubscription.items.data[0]?.price?.id || "";
+        const priceId: string =
+          stripeSubscription.items.data[0]?.price?.id || "";
 
-        const existing = await db.select().from(subscriptions)
+        const existing = await db
+          .select()
+          .from(subscriptions)
           .where(eq(subscriptions.stripeSubscriptionId, subscriptionId))
           .limit(1);
 
-        const users = await db.select().from(user).where(eq(user.stripeCustomerId, customerId)).limit(1);
+        const users = await db
+          .select()
+          .from(user)
+          .where(eq(user.stripeCustomerId, customerId))
+          .limit(1);
         const userId = users[0]?.id;
 
         if (!userId) {
@@ -139,7 +170,8 @@ export class StripeService {
             cancelAtPeriodEnd: cancelAtEnd,
           });
         } else {
-          await db.update(subscriptions)
+          await db
+            .update(subscriptions)
             .set({
               status,
               currentPeriodStart: periodStart,
@@ -152,11 +184,13 @@ export class StripeService {
         }
         break;
       }
-      case 'customer.subscription.deleted': {
-        const stripeSubscription: Stripe.Subscription = event.data.object as Stripe.Subscription;
+      case "customer.subscription.deleted": {
+        const stripeSubscription: Stripe.Subscription = event.data
+          .object as Stripe.Subscription;
         const subscriptionId: string = stripeSubscription.id;
 
-        await db.update(subscriptions)
+        await db
+          .update(subscriptions)
           .set({
             status: stripeSubscription.status,
             updatedAt: new Date(),
@@ -164,32 +198,40 @@ export class StripeService {
           .where(eq(subscriptions.stripeSubscriptionId, subscriptionId));
         break;
       }
-      case 'invoice.paid': {
-        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null };
-        const subscriptionId: string | undefined = typeof invoice.subscription === 'string'
-          ? invoice.subscription
-          : invoice.subscription?.id;
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice & {
+          subscription?: string | Stripe.Subscription | null;
+        };
+        const subscriptionId: string | undefined =
+          typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : invoice.subscription?.id;
 
         if (subscriptionId) {
-          await db.update(subscriptions)
+          await db
+            .update(subscriptions)
             .set({
-              status: 'active',
+              status: "active",
               updatedAt: new Date(),
             })
             .where(eq(subscriptions.stripeSubscriptionId, subscriptionId));
         }
         break;
       }
-      case 'invoice.payment_failed': {
-        const invoice = event.data.object as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null };
-        const subscriptionId: string | undefined = typeof invoice.subscription === 'string'
-          ? invoice.subscription
-          : invoice.subscription?.id;
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice & {
+          subscription?: string | Stripe.Subscription | null;
+        };
+        const subscriptionId: string | undefined =
+          typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : invoice.subscription?.id;
 
         if (subscriptionId) {
-          await db.update(subscriptions)
+          await db
+            .update(subscriptions)
             .set({
-              status: 'past_due',
+              status: "past_due",
               updatedAt: new Date(),
             })
             .where(eq(subscriptions.stripeSubscriptionId, subscriptionId));
@@ -202,7 +244,9 @@ export class StripeService {
   }
 
   async getSubscription(userId: string): Promise<DbSubscription | null> {
-    const userSubscriptions = await db.select().from(subscriptions)
+    const userSubscriptions = await db
+      .select()
+      .from(subscriptions)
       .where(eq(subscriptions.userId, userId))
       .limit(1);
     return userSubscriptions[0] ?? null;

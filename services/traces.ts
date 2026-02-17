@@ -55,7 +55,7 @@ function toNewTrace(input: TraceInput, projectId: string): NewTrace {
 export async function ingestTraces(
   projectId: string,
   rawTraces: unknown,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<IngestResult> {
   const parsed = batchTraceSchema.parse(rawTraces);
   return ingestTraceBatch(projectId, parsed, storage);
@@ -68,7 +68,7 @@ export async function ingestTraces(
 export async function ingestTraceBatch(
   projectId: string,
   traces: TraceInput[],
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<IngestResult> {
   const sessionIds = new Set<string>();
   for (const trace of traces) {
@@ -102,7 +102,7 @@ export async function ingestTraceBatch(
 export async function ingestTraceBatchIdempotent(
   projectId: string,
   traces: TraceInput[],
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<IngestResult> {
   const sessionIds = new Set<string>();
   for (const trace of traces) {
@@ -135,7 +135,7 @@ export async function ingestTraceBatchIdempotent(
 export async function getTrace(
   traceId: string,
   projectId: string,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<Trace | null> {
   return storage.getTrace(traceId, projectId);
 }
@@ -146,7 +146,7 @@ export async function getTrace(
 export async function queryTraces(
   projectId: string,
   filters: TraceQueryFilters,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<QueryResult> {
   const result = await storage.queryTraces(projectId, filters);
 

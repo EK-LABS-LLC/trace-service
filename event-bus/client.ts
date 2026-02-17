@@ -7,7 +7,9 @@ let walWriter: WALWriter | null = null;
 let walIndex: WALIndex | null = null;
 let walCheckpoint: WALCheckpoint | null = null;
 
-export function getEventBus(): { publish: (subject: string, payload: unknown) => Promise<void> } {
+export function getEventBus(): {
+  publish: (subject: string, payload: unknown) => Promise<void>;
+} {
   if (!walWriter) {
     throw new Error("WAL not initialized. Call startWAL() first.");
   }
@@ -37,7 +39,7 @@ export async function startWAL(): Promise<void> {
       maxSegments: env.WAL_MAX_SEGMENTS,
       maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
     },
-    walIndex
+    walIndex,
   );
 
   await walWriter.initialize();

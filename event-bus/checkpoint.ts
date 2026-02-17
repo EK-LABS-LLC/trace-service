@@ -1,4 +1,10 @@
-import { mkdirSync, renameSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import {
+  mkdirSync,
+  renameSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
 import { dirname } from "node:path";
 
 /**

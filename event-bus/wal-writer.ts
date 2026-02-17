@@ -25,7 +25,10 @@ export class WALWriter {
 
     const active = this.index.getActiveSegment();
     if (active) {
-      this.currentSegment = WALSegment.open(this.config.walDir, toNumber(active.startSequence));
+      this.currentSegment = WALSegment.open(
+        this.config.walDir,
+        toNumber(active.startSequence),
+      );
       this.segmentCreatedAt = active.createdAt;
     } else {
       await this.rotate();
@@ -47,7 +50,10 @@ export class WALWriter {
     this.currentSegment.append(line);
     this.writeCount++;
 
-    if (this.config.fsyncEvery > 0 && this.writeCount % this.config.fsyncEvery === 0) {
+    if (
+      this.config.fsyncEvery > 0 &&
+      this.writeCount % this.config.fsyncEvery === 0
+    ) {
       this.currentSegment.sync();
       this.currentSegment.openForWrite();
     }
@@ -57,7 +63,6 @@ export class WALWriter {
 
     return record.sequence;
   }
-
 
   private async checkRotation(): Promise<void> {
     if (!this.currentSegment) {
@@ -87,7 +92,10 @@ export class WALWriter {
         this.index.update(active.filename, { closedAt: Date.now() });
       }
     }
-    const newSegment = WALSegment.create(this.config.walDir, this.currentSequence);
+    const newSegment = WALSegment.create(
+      this.config.walDir,
+      this.currentSequence,
+    );
 
     this.index.register({
       filename: newSegment.path.split("/").pop()!,
@@ -115,15 +123,24 @@ export class WALWriter {
     const segments = this.index.getAllSegments();
 
     for (const meta of segments) {
-      const segment = WALSegment.open(this.config.walDir, toNumber(meta.startSequence));
+      const segment = WALSegment.open(
+        this.config.walDir,
+        toNumber(meta.startSequence),
+      );
       for await (const rawLine of segment.readLines(0)) {
         try {
           const parsed = JSON.parse(rawLine) as WALRecord;
-          if (typeof parsed.sequence === "number" && Number.isFinite(parsed.sequence)) {
+          if (
+            typeof parsed.sequence === "number" &&
+            Number.isFinite(parsed.sequence)
+          ) {
             maxSequence = Math.max(maxSequence, parsed.sequence);
           }
         } catch (err) {
-          console.warn(`Skipping invalid WAL line while bootstrapping ${meta.filename}:`, err);
+          console.warn(
+            `Skipping invalid WAL line while bootstrapping ${meta.filename}:`,
+            err,
+          );
         }
       }
     }

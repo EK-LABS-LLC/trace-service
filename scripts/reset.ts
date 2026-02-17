@@ -1,5 +1,12 @@
 import { db } from "../db";
-import { apiKeys, userProjects, traces, sessions, projects, subscriptions } from "../db/schema";
+import {
+  apiKeys,
+  userProjects,
+  traces,
+  sessions,
+  projects,
+  subscriptions,
+} from "../db/schema";
 
 /**
  * Reset database - clears all data from all tables.
@@ -30,9 +37,11 @@ async function reset() {
   console.log("✅ Database reset complete!");
 }
 
-reset().then(() => {
-  process.exit(0);
-}).catch((err) => {
-  console.error("❌ Reset failed:", err);
-  process.exit(1);
-});
+reset()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("❌ Reset failed:", err);
+    process.exit(1);
+  });

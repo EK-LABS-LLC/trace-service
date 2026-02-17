@@ -1,4 +1,15 @@
-import { eq, and, gte, lte, sql, sum, avg, count, isNotNull, desc } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gte,
+  lte,
+  sql,
+  sum,
+  avg,
+  count,
+  isNotNull,
+  desc,
+} from "drizzle-orm";
 import type { Database } from "./index";
 import { traces } from "./schema";
 import type { GroupBy } from "../shared/validation";
@@ -74,7 +85,7 @@ function buildDateConditions(projectId: string, dateRange: DateRange) {
   return and(
     eq(traces.projectId, projectId),
     gte(traces.timestamp, dateRange.dateFrom),
-    lte(traces.timestamp, dateRange.dateTo)
+    lte(traces.timestamp, dateRange.dateTo),
   );
 }
 
@@ -84,7 +95,7 @@ function buildDateConditions(projectId: string, dateRange: DateRange) {
 export async function getTotalCost(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: sum(traces.costCents) })
@@ -100,7 +111,7 @@ export async function getTotalCost(
 export async function getTotalTokens(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<{ inputTokens: number; outputTokens: number; totalTokens: number }> {
   const result = await db
     .select({
@@ -126,7 +137,7 @@ export async function getTotalTokens(
 export async function getAvgLatency(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ avg: avg(traces.latencyMs) })
@@ -142,7 +153,7 @@ export async function getAvgLatency(
 export async function getErrorRate(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const conditions = buildDateConditions(projectId, dateRange);
 
@@ -171,7 +182,7 @@ export async function getCostOverTime(
   db: Database,
   projectId: string,
   dateRange: DateRange,
-  groupBy?: GroupBy
+  groupBy?: GroupBy,
 ): Promise<CostDataPoint[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
@@ -216,7 +227,7 @@ export async function getCostOverTime(
 export async function getTotalRequests(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: count() })
@@ -232,12 +243,17 @@ export async function getTotalRequests(
 export async function getTotalSessions(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: sql<number>`COUNT(DISTINCT ${traces.sessionId})` })
     .from(traces)
-    .where(and(buildDateConditions(projectId, dateRange), isNotNull(traces.sessionId)));
+    .where(
+      and(
+        buildDateConditions(projectId, dateRange),
+        isNotNull(traces.sessionId),
+      ),
+    );
 
   return Number(result[0]?.total ?? 0);
 }
@@ -248,12 +264,17 @@ export async function getTotalSessions(
 export async function getErrorCount(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: count() })
     .from(traces)
-    .where(and(buildDateConditions(projectId, dateRange), eq(traces.status, "error")));
+    .where(
+      and(
+        buildDateConditions(projectId, dateRange),
+        eq(traces.status, "error"),
+      ),
+    );
 
   return result[0]?.total ?? 0;
 }
@@ -264,7 +285,7 @@ export async function getErrorCount(
 export async function getCostByProvider(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<CostByProvider[]> {
   const result = await db
     .select({
@@ -291,7 +312,7 @@ export async function getStatsByModel(
   db: Database,
   projectId: string,
   dateRange: DateRange,
-  limit: number = 10
+  limit: number = 10,
 ): Promise<StatsByModel[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
@@ -318,11 +339,10 @@ export async function getStatsByModel(
     costCents: Number(row.costCents ?? 0),
     avgLatency: Number(row.avgLatency ?? 0),
     totalTokens: Number(row.totalTokens ?? 0),
-    errorRate: row.requests > 0 ? (Number(row.errorCount) / row.requests) * 100 : 0,
+    errorRate:
+      row.requests > 0 ? (Number(row.errorCount) / row.requests) * 100 : 0,
   }));
 }
-
-
 
 /**
  * Get cost over time broken down by provider for a project within a date range.
@@ -331,7 +351,7 @@ export async function getCostOverTimeByProvider(
   db: Database,
   projectId: string,
   dateRange: DateRange,
-  groupBy: "day" | "hour" = "day"
+  groupBy: "day" | "hour" = "day",
 ): Promise<CostOverTimeByProvider[]> {
   const conditions = buildDateConditions(projectId, dateRange);
   const periodExpr =

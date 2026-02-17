@@ -2,8 +2,10 @@ const BASE_URL = "http://localhost:3000";
 
 export { BASE_URL };
 
-const TEST_USER_EMAIL = process.env.TEST_USER_EMAIL || "integration-suite@pulse.test";
-const TEST_USER_PASSWORD = process.env.TEST_USER_PASSWORD || "IntegrationPass!123";
+const TEST_USER_EMAIL =
+  process.env.TEST_USER_EMAIL || "integration-suite@pulse.test";
+const TEST_USER_PASSWORD =
+  process.env.TEST_USER_PASSWORD || "IntegrationPass!123";
 const TEST_USER_NAME = process.env.TEST_USER_NAME || "Integration Suite User";
 
 /**
@@ -29,7 +31,7 @@ function extractSessionCookie(setCookieHeader: string | null): string | null {
 async function sessionFetch(
   path: string,
   sessionCookie: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<Response> {
   return fetch(`${BASE_URL}${path}`, {
     ...options,
@@ -72,7 +74,9 @@ async function signUpTestUser(): Promise<void> {
 
   if (!signUpResponse.ok) {
     const text = await signUpResponse.text();
-    throw new Error(`Failed to sign up shared test user (${signUpResponse.status}): ${text}`);
+    throw new Error(
+      `Failed to sign up shared test user (${signUpResponse.status}): ${text}`,
+    );
   }
 }
 
@@ -113,30 +117,41 @@ async function ensureTestUserSession(): Promise<string> {
 /**
  * Create a test project with API key
  */
-export async function createTestProject(name: string = "Test Project"): Promise<TestProject> {
+export async function createTestProject(
+  name: string = "Test Project",
+): Promise<TestProject> {
   console.log(`[setup] Creating test project: "${name}"`);
   const sessionCookie = await ensureTestUserSession();
 
-  const createProjectResponse = await sessionFetch("/dashboard/api/projects", sessionCookie, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const createProjectResponse = await sessionFetch(
+    "/dashboard/api/projects",
+    sessionCookie,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ name }),
     },
-    body: JSON.stringify({ name }),
-  });
+  );
 
   if (!createProjectResponse.ok) {
     const text = await createProjectResponse.text();
-    throw new Error(`Failed to create test project (${createProjectResponse.status}): ${text}`);
+    throw new Error(
+      `Failed to create test project (${createProjectResponse.status}): ${text}`,
+    );
   }
 
-  const projectData = (await createProjectResponse.json()) as { projectId: string; apiKey: string };
+  const projectData = (await createProjectResponse.json()) as {
+    projectId: string;
+    apiKey: string;
+  };
   const testProject = { id: projectData.projectId, apiKey: projectData.apiKey };
   testProjects.push(testProject);
   projectApiKeys.set(testProject.id, testProject.apiKey);
 
   console.log(
-    `[setup] Project created: ${projectData.projectId} (tracking ${testProjects.length} projects)`
+    `[setup] Project created: ${projectData.projectId} (tracking ${testProjects.length} projects)`,
   );
   return testProject;
 }
@@ -147,7 +162,7 @@ export async function createTestProject(name: string = "Test Project"): Promise<
 export async function createTestTraces(
   projectId: string,
   count: number = 10,
-  sessionId?: string
+  sessionId?: string,
 ): Promise<string[]> {
   const apiKey = projectApiKeys.get(projectId);
   if (!apiKey) {
@@ -178,7 +193,9 @@ export async function createTestTraces(
 
   if (!ingestResponse.ok) {
     const text = await ingestResponse.text();
-    throw new Error(`Failed to ingest test traces (${ingestResponse.status}): ${text}`);
+    throw new Error(
+      `Failed to ingest test traces (${ingestResponse.status}): ${text}`,
+    );
   }
 
   const query = `/v1/traces?session_id=${encodeURIComponent(sid)}&limit=${count}`;
@@ -188,7 +205,9 @@ export async function createTestTraces(
     throw new Error(`Failed to list traces (${listResponse.status}): ${text}`);
   }
 
-  const listData = (await listResponse.json()) as { traces: Array<{ traceId: string }> };
+  const listData = (await listResponse.json()) as {
+    traces: Array<{ traceId: string }>;
+  };
   return listData.traces.map((t) => t.traceId);
 }
 
@@ -197,7 +216,7 @@ export async function createTestTraces(
  */
 export async function cleanupTestData(): Promise<void> {
   console.log(
-    `[setup] Cleanup skipped (${testProjects.length} projects). API-only tests do not use direct DB cleanup.`
+    `[setup] Cleanup skipped (${testProjects.length} projects). API-only tests do not use direct DB cleanup.`,
   );
   testProjects.length = 0;
   projectApiKeys.clear();
@@ -210,7 +229,7 @@ export async function cleanupTestData(): Promise<void> {
 export async function authFetch(
   path: string,
   apiKey: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<Response> {
   const method = options.method || "GET";
   const keyPreview = apiKey.slice(0, 15) + "...";

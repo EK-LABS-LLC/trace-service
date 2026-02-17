@@ -3,7 +3,8 @@ import { encryptApiKey, decryptApiKey } from "./crypto";
 
 describe("API Key Encryption", () => {
   beforeAll(() => {
-    process.env.ENCRYPTION_KEY = "test-encryption-key-32-chars-long-for-testing";
+    process.env.ENCRYPTION_KEY =
+      "test-encryption-key-32-chars-long-for-testing";
   });
 
   test("encrypt and decrypt returns original value", () => {

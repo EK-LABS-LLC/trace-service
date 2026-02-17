@@ -1,5 +1,10 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { BASE_URL, authFetch, createTestProject, cleanupTestData } from "./setup";
+import {
+  BASE_URL,
+  authFetch,
+  createTestProject,
+  cleanupTestData,
+} from "./setup";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -108,7 +113,10 @@ function findWALRecordByTraceId(traceId: string): WALRecord | null {
 /**
  * Get checkpoint data
  */
-function getCheckpointData(): { nextSequence: string; processedAt: number } | null {
+function getCheckpointData(): {
+  nextSequence: string;
+  processedAt: number;
+} | null {
   const checkpointPath = join(getWalDir(), "wal.checkpoint");
 
   if (!existsSync(checkpointPath)) {
@@ -180,7 +188,9 @@ describe("WAL Integration Tests", () => {
 
       // Check sequences are strictly increasing
       for (let i = 1; i < allRecords.length; i++) {
-        expect(allRecords[i]!.sequence).toBeGreaterThan(allRecords[i - 1]!.sequence);
+        expect(allRecords[i]!.sequence).toBeGreaterThan(
+          allRecords[i - 1]!.sequence,
+        );
       }
     });
   });
@@ -205,11 +215,15 @@ describe("WAL Integration Tests", () => {
       ];
 
       // Send to async endpoint
-      const asyncResponse = await authFetch("/v1/traces/async", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(traces),
-      });
+      const asyncResponse = await authFetch(
+        "/v1/traces/async",
+        testProject.apiKey,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(traces),
+        },
+      );
 
       expect(asyncResponse.status).toBe(202);
 
@@ -222,7 +236,10 @@ describe("WAL Integration Tests", () => {
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Verify trace is in database via API
-      const queryResponse = await authFetch(`/v1/traces/${traceId}`, testProject.apiKey);
+      const queryResponse = await authFetch(
+        `/v1/traces/${traceId}`,
+        testProject.apiKey,
+      );
       expect(queryResponse.status).toBe(200);
 
       const trace = (await queryResponse.json()) as Trace;
@@ -233,7 +250,9 @@ describe("WAL Integration Tests", () => {
 
     test("batch traces all processed and stored", async () => {
       const batchCount = 10;
-      const traceIds = Array.from({ length: batchCount }, () => crypto.randomUUID());
+      const traceIds = Array.from({ length: batchCount }, () =>
+        crypto.randomUUID(),
+      );
 
       const traces = traceIds.map((traceId) => ({
         trace_id: traceId,
@@ -246,11 +265,15 @@ describe("WAL Integration Tests", () => {
       }));
 
       // Send all traces in one request
-      const batchResponse = await authFetch("/v1/traces/async", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(traces),
-      });
+      const batchResponse = await authFetch(
+        "/v1/traces/async",
+        testProject.apiKey,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(traces),
+        },
+      );
 
       expect(batchResponse.status).toBe(202);
 
@@ -258,7 +281,10 @@ describe("WAL Integration Tests", () => {
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
       // Verify all traces are in database
-      const queryResponse = await authFetch(`/v1/traces?limit=100`, testProject.apiKey);
+      const queryResponse = await authFetch(
+        `/v1/traces?limit=100`,
+        testProject.apiKey,
+      );
       const queryData = (await queryResponse.json()) as TracesResponse;
 
       const foundIds = queryData.traces.map((t) => t.traceId);
@@ -305,13 +331,15 @@ describe("WAL Integration Tests", () => {
       // Query by session_id
       const sessionResponse = await authFetch(
         `/v1/traces?session_id=${sessionId}`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const sessionData = (await sessionResponse.json()) as TracesResponse;
 
       expect(sessionData.traces.length).toBeGreaterThanOrEqual(2);
       expect(
-        sessionData.traces.every((t) => (t as { sessionId?: string }).sessionId === sessionId)
+        sessionData.traces.every(
+          (t) => (t as { sessionId?: string }).sessionId === sessionId,
+        ),
       ).toBe(true);
     });
 
@@ -341,7 +369,10 @@ describe("WAL Integration Tests", () => {
 
       await new Promise((resolve) => setTimeout(resolve, 800));
 
-      const response = await authFetch(`/v1/traces/${traceId}`, testProject.apiKey);
+      const response = await authFetch(
+        `/v1/traces/${traceId}`,
+        testProject.apiKey,
+      );
       expect(response.status).toBe(200);
 
       const trace = (await response.json()) as Trace;

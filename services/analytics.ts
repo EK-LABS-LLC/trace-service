@@ -73,7 +73,7 @@ function computeMetrics(
   totalSessions: number,
   inputTokens: number,
   outputTokens: number,
-  totalTokens: number
+  totalTokens: number,
 ): ComputedMetrics {
   return {
     costPerRequest: safeDivide(totalCost, totalRequests),
@@ -93,7 +93,7 @@ export async function getAnalytics(
   projectId: string,
   dateRange: AnalyticsDateRange,
   db: Database,
-  groupBy?: GroupBy
+  groupBy?: GroupBy,
 ): Promise<AnalyticsResult> {
   const dbDateRange = {
     dateFrom: dateRange.dateFrom,
@@ -117,7 +117,12 @@ export async function getAnalytics(
     getTotalTokens(db, projectId, dbDateRange),
     getAvgLatency(db, projectId, dbDateRange),
     getErrorRate(db, projectId, dbDateRange),
-    getCostOverTimeByProvider(db, projectId, dbDateRange, groupBy === "hour" ? "hour" : "day"),
+    getCostOverTimeByProvider(
+      db,
+      projectId,
+      dbDateRange,
+      groupBy === "hour" ? "hour" : "day",
+    ),
     getCostByProvider(db, projectId, dbDateRange),
     getStatsByModel(db, projectId, dbDateRange, 5),
   ]);
@@ -128,7 +133,7 @@ export async function getAnalytics(
     totalSessions,
     tokens.inputTokens,
     tokens.outputTokens,
-    tokens.totalTokens
+    tokens.totalTokens,
   );
 
   return {

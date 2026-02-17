@@ -1,4 +1,10 @@
-import { mkdirSync, writeFileSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { WALRecord } from "./wal-record";
 
@@ -33,7 +39,11 @@ export class DeadLetterQueue {
   /**
    * Write a failed record to the DLQ.
    */
-  async write(record: WALRecord, error: string, retries: number): Promise<void> {
+  async write(
+    record: WALRecord,
+    error: string,
+    retries: number,
+  ): Promise<void> {
     const entry: DeadLetterEntry = {
       sequence: record.sequence.toString(),
       originalRecord: record,

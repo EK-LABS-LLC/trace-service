@@ -14,7 +14,7 @@
     "db:snapshot": "bunx drizzle-kit generate",
     "test": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",
-    "format": "bunx prettier --config ../.prettierrc --ignore-path ../.prettierignore --write \"**/*.{ts,tsx,js,json}\""
+    "format": "bunx prettier --write \"**/*.{ts,tsx,js,json}\""
   },
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",

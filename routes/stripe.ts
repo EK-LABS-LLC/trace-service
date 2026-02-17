@@ -5,7 +5,6 @@ import { StripeService } from "../services/stripe.service";
 const stripeService = new StripeService();
 const stripeRoutes = new Hono();
 
-
 stripeRoutes.post("/webhook", async (c: Context) => {
   const body = await c.req.text();
   const signature = c.req.header("stripe-signature");
@@ -19,7 +18,13 @@ stripeRoutes.post("/webhook", async (c: Context) => {
     return c.json({ received: true });
   } catch (error) {
     console.error("Error processing webhook:", error);
-    return c.json({ error: error instanceof Error ? error.message : "Webhook processing failed" }, 500);
+    return c.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Webhook processing failed",
+      },
+      500,
+    );
   }
 });
 
@@ -41,13 +46,22 @@ stripeRoutes.post("/create-checkout-session", async (c: Context) => {
   }
 
   try {
-    const url = await stripeService.createCheckoutSession(userId, userEmail, priceId);
+    const url = await stripeService.createCheckoutSession(
+      userId,
+      userEmail,
+      priceId,
+    );
     return c.json({ url });
   } catch (error) {
     console.error("Error creating checkout session:", error);
     return c.json(
-      { error: error instanceof Error ? error.message : "Failed to create checkout session" },
-      500
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create checkout session",
+      },
+      500,
     );
   }
 });

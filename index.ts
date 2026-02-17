@@ -6,7 +6,12 @@ import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/errors";
 import { logger } from "./middleware/logger";
 import { auth } from "./auth/auth";
-import { handleBatchTraces, handleAsyncTrace, getTraces, getTraceById } from "./routes/traces";
+import {
+  handleBatchTraces,
+  handleAsyncTrace,
+  getTraces,
+  getTraceById,
+} from "./routes/traces";
 import { handleGetSessionTraces } from "./routes/sessions";
 import { handleGetAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
@@ -22,8 +27,6 @@ const app = new Hono();
 app.onError(errorHandler);
 app.use("*", logger);
 
-
-
 app.get("/health", (c) => {
   return c.json({ status: "ok", service: "pulse" });
 });
@@ -37,7 +40,7 @@ app.use(
     exposeHeaders: ["Content-Length"],
     maxAge: 600,
     credentials: true,
-  })
+  }),
 );
 
 app.use(
@@ -47,7 +50,7 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization", "X-Project-Id"],
     allowMethods: ["POST", "GET", "DELETE", "OPTIONS"],
     credentials: true,
-  })
+  }),
 );
 
 app.use(
@@ -57,20 +60,20 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["POST", "GET", "OPTIONS"],
     credentials: true,
-  })
+  }),
 );
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
-
 // Better-Auth exposes this route by default
 app.post("/api/auth/sign-up/email", (c) => {
-  return c.json({ error: "Use /dashboard/api/signup for account creation" }, 403);
+  return c.json(
+    { error: "Use /dashboard/api/signup for account creation" },
+    403,
+  );
 });
-
-
 
 app.post("/dashboard/api/signup", handleSignupWithProject);
 app.route("/dashboard/api", dashboard);
@@ -106,7 +109,7 @@ const traceListener = new TraceStreamListener(
     maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
   },
   walCheckpoint,
-  env.WAL_MAX_RETRIES
+  env.WAL_MAX_RETRIES,
 );
 void traceListener.start();
 

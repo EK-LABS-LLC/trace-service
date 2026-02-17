@@ -2,7 +2,11 @@ import { eq, and, gte, lte, count, sql } from "drizzle-orm";
 import type { Database } from "./index";
 import { traces, sessions } from "./schema";
 import type { Trace, NewTrace, Session, NewSession } from "./schema";
-import type { StorageAdapter, TraceQueryFilters, TraceQueryResult } from "./adapter";
+import type {
+  StorageAdapter,
+  TraceQueryFilters,
+  TraceQueryResult,
+} from "./adapter";
 import { db } from "./index";
 
 /**
@@ -24,7 +28,10 @@ export class SqliteStorage implements StorageAdapter {
    * Idempotent trace insertion for WAL processing.
    * Checks if trace exists before inserting to handle duplicates from crash recovery.
    */
-  async insertTraceIdempotent(projectId: string, trace: NewTrace): Promise<Trace> {
+  async insertTraceIdempotent(
+    projectId: string,
+    trace: NewTrace,
+  ): Promise<Trace> {
     // Check if trace already exists
     const existing = await this.getTrace(trace.traceId!, projectId);
     if (existing) {
@@ -43,7 +50,10 @@ export class SqliteStorage implements StorageAdapter {
     return trace ?? null;
   }
 
-  async queryTraces(projectId: string, filters: TraceQueryFilters = {}): Promise<TraceQueryResult> {
+  async queryTraces(
+    projectId: string,
+    filters: TraceQueryFilters = {},
+  ): Promise<TraceQueryResult> {
     const conditions = [eq(traces.projectId, projectId)];
 
     if (filters.sessionId) {
@@ -67,7 +77,10 @@ export class SqliteStorage implements StorageAdapter {
 
     const whereClause = and(...conditions);
 
-    const countResult = await this.db.select({ total: count() }).from(traces).where(whereClause);
+    const countResult = await this.db
+      .select({ total: count() })
+      .from(traces)
+      .where(whereClause);
     const total = countResult[0]?.total ?? 0;
 
     const limit = filters.limit ?? 100;
@@ -84,7 +97,10 @@ export class SqliteStorage implements StorageAdapter {
     return { traces: results, total };
   }
 
-  async countTraces(projectId: string, filters: TraceQueryFilters = {}): Promise<number> {
+  async countTraces(
+    projectId: string,
+    filters: TraceQueryFilters = {},
+  ): Promise<number> {
     const conditions = [eq(traces.projectId, projectId)];
 
     if (filters.sessionId) {
@@ -114,7 +130,10 @@ export class SqliteStorage implements StorageAdapter {
     return countResult[0]?.total ?? 0;
   }
 
-  async upsertSession(projectId: string, session: NewSession): Promise<Session> {
+  async upsertSession(
+    projectId: string,
+    session: NewSession,
+  ): Promise<Session> {
     const insert = this.db.insert(sessions).values({ ...session, projectId });
 
     const withConflict =
@@ -129,11 +148,16 @@ export class SqliteStorage implements StorageAdapter {
     return result[0]!;
   }
 
-  async getSessionTraces(sessionId: string, projectId: string): Promise<Trace[]> {
+  async getSessionTraces(
+    sessionId: string,
+    projectId: string,
+  ): Promise<Trace[]> {
     return this.db
       .select()
       .from(traces)
-      .where(and(eq(traces.sessionId, sessionId), eq(traces.projectId, projectId)))
+      .where(
+        and(eq(traces.sessionId, sessionId), eq(traces.projectId, projectId)),
+      )
       .orderBy(sql`${traces.timestamp} ASC`);
   }
 }

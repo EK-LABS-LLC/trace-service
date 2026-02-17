@@ -16,11 +16,7 @@ export class WALReader {
   private index: WALIndex;
   private lastLoggedState?: { nextSequence: number; segmentsLength: number };
 
-  constructor(
-    config: WALConfig,
-    checkpoint: WALCheckpoint,
-    index: WALIndex
-  ) {
+  constructor(config: WALConfig, checkpoint: WALCheckpoint, index: WALIndex) {
     this.config = config;
     this.checkpoint = checkpoint;
     this.index = index;
@@ -43,7 +39,9 @@ export class WALReader {
       this.lastLoggedState.nextSequence !== nextSequence ||
       this.lastLoggedState.segmentsLength !== segments.length;
     if (stateChanged) {
-      console.log(`[WAL reader] nextSequence=${nextSequence}, segments.length=${segments.length}`);
+      console.log(
+        `[WAL reader] nextSequence=${nextSequence}, segments.length=${segments.length}`,
+      );
       this.lastLoggedState = { nextSequence, segmentsLength: segments.length };
     }
 
@@ -52,7 +50,10 @@ export class WALReader {
     // Read all segments in sorted order and gate by record.sequence.
     for (let i = 0; i < segments.length; i++) {
       const meta = segments[i]!;
-      const segment = WALSegment.open(this.config.walDir, toNumber(meta.startSequence));
+      const segment = WALSegment.open(
+        this.config.walDir,
+        toNumber(meta.startSequence),
+      );
 
       let lineIndex = 0;
       const fromLine = 0;
@@ -62,7 +63,7 @@ export class WALReader {
 
           if (record.sequence <= lastSeenSequence) {
             console.error(
-              `WAL out-of-order sequence in ${meta.filename}: sequence=${record.sequence}, lastSeen=${lastSeenSequence}`
+              `WAL out-of-order sequence in ${meta.filename}: sequence=${record.sequence}, lastSeen=${lastSeenSequence}`,
             );
             segment.truncateAtLine(fromLine + lineIndex);
             this.index.update(meta.filename, {
@@ -81,7 +82,10 @@ export class WALReader {
 
           yield record;
         } catch (err) {
-          console.error(`Failed to decode WAL record in ${meta.filename} at line ${fromLine + lineIndex}:`, err);
+          console.error(
+            `Failed to decode WAL record in ${meta.filename} at line ${fromLine + lineIndex}:`,
+            err,
+          );
           // Truncate at this point
           segment.truncateAtLine(fromLine + lineIndex);
           // Update index

@@ -4,11 +4,17 @@ export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  emailVerified: integer("email_verified", { mode: "boolean" }).notNull().default(false),
+  emailVerified: integer("email_verified", { mode: "boolean" })
+    .notNull()
+    .default(false),
   image: text("image"),
   stripeCustomerId: text("stripe_customer_id").unique(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().defaultNow(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
 });
 
 export const authSession = sqliteTable("auth_session", {
@@ -20,8 +26,12 @@ export const authSession = sqliteTable("auth_session", {
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().defaultNow(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
 });
 
 export const account = sqliteTable("account", {
@@ -33,13 +43,21 @@ export const account = sqliteTable("account", {
   providerId: text("provider_id").notNull(),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
-  accessTokenExpiresAt: integer("access_token_expires_at", { mode: "timestamp" }),
-  refreshTokenExpiresAt: integer("refresh_token_expires_at", { mode: "timestamp" }),
+  accessTokenExpiresAt: integer("access_token_expires_at", {
+    mode: "timestamp",
+  }),
+  refreshTokenExpiresAt: integer("refresh_token_expires_at", {
+    mode: "timestamp",
+  }),
   scope: text("scope"),
   idToken: text("id_token"),
   password: text("password"),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().defaultNow(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
 });
 
 export const verification = sqliteTable("verification", {
@@ -47,6 +65,10 @@ export const verification = sqliteTable("verification", {
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" }).notNull().defaultNow(),
-  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().defaultNow(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .defaultNow(),
 });

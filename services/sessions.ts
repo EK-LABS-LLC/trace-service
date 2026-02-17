@@ -16,7 +16,7 @@ export interface SessionTracesResult {
 export async function getSessionTraces(
   sessionId: string,
   projectId: string,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<SessionTracesResult> {
   const traces = await storage.getSessionTraces(sessionId, projectId);
 

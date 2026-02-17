@@ -1,6 +1,12 @@
 import { faker } from "@faker-js/faker";
 import { db } from "../db";
-import { projects, apiKeys, sessions, traces, type NewTrace } from "../db/schema";
+import {
+  projects,
+  apiKeys,
+  sessions,
+  traces,
+  type NewTrace,
+} from "../db/schema";
 import { hashApiKey } from "../auth/queries";
 
 // Configuration
@@ -17,8 +23,15 @@ type Provider = (typeof PROVIDERS)[number];
 
 const MODELS: Record<Provider, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-  anthropic: ["claude-3-opus-20240229", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"],
-  openrouter: ["meta-llama/llama-3-70b-instruct", "mistralai/mixtral-8x7b-instruct"],
+  anthropic: [
+    "claude-3-opus-20240229",
+    "claude-3-sonnet-20240229",
+    "claude-3-haiku-20240307",
+  ],
+  openrouter: [
+    "meta-llama/llama-3-70b-instruct",
+    "mistralai/mixtral-8x7b-instruct",
+  ],
 };
 
 // Cost per 1k tokens (input/output) in cents
@@ -43,23 +56,40 @@ function randomBetween(min: number, max: number): number {
 }
 
 function randomDate(from: Date, to: Date): Date {
-  return new Date(from.getTime() + Math.random() * (to.getTime() - from.getTime()));
+  return new Date(
+    from.getTime() + Math.random() * (to.getTime() - from.getTime()),
+  );
 }
 
-function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
+function calculateCost(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
   const pricing = COSTS[model] ?? { input: 0.1, output: 0.3 };
-  return (inputTokens / 1000) * pricing.input + (outputTokens / 1000) * pricing.output;
+  return (
+    (inputTokens / 1000) * pricing.input +
+    (outputTokens / 1000) * pricing.output
+  );
 }
 
-function generateTrace(projectId: string, sessionId: string, timestamp: Date): NewTrace {
+function generateTrace(
+  projectId: string,
+  sessionId: string,
+  timestamp: Date,
+): NewTrace {
   const provider = randomElement(PROVIDERS);
   const model = randomElement(MODELS[provider]);
   const isError = Math.random() < 0.05; // 5% error rate
 
   const inputTokens = randomBetween(50, 2000);
   const outputTokens = isError ? 0 : randomBetween(100, 4000);
-  const latencyMs = isError ? randomBetween(100, 500) : randomBetween(200, 3000);
-  const costCents = isError ? 0 : calculateCost(model, inputTokens, outputTokens);
+  const latencyMs = isError
+    ? randomBetween(100, 500)
+    : randomBetween(200, 3000);
+  const costCents = isError
+    ? 0
+    : calculateCost(model, inputTokens, outputTokens);
 
   const trace: NewTrace = {
     projectId,
@@ -84,11 +114,17 @@ function generateTrace(projectId: string, sessionId: string, timestamp: Date): N
           id: faker.string.uuid(),
           choices: [
             {
-              message: { role: "assistant", content: faker.lorem.paragraphs(2) },
+              message: {
+                role: "assistant",
+                content: faker.lorem.paragraphs(2),
+              },
               finish_reason: "stop",
             },
           ],
-          usage: { prompt_tokens: inputTokens, completion_tokens: outputTokens },
+          usage: {
+            prompt_tokens: inputTokens,
+            completion_tokens: outputTokens,
+          },
         },
     outputText: isError ? null : faker.lorem.paragraphs(2),
     finishReason: isError ? null : "stop",
@@ -103,7 +139,11 @@ function generateTrace(projectId: string, sessionId: string, timestamp: Date): N
       : null,
     metadata: {
       userId: faker.string.uuid(),
-      environment: faker.helpers.arrayElement(["production", "staging", "development"]),
+      environment: faker.helpers.arrayElement([
+        "production",
+        "staging",
+        "development",
+      ]),
     },
   };
 
@@ -119,7 +159,10 @@ async function seed() {
   const keyHash = hashApiKey(apiKey);
 
   console.log("📁 Creating project...");
-  const [project] = await db.insert(projects).values({ name: projectName }).returning();
+  const [project] = await db
+    .insert(projects)
+    .values({ name: projectName })
+    .returning();
   console.log(`   Project ID: ${project!.id}`);
   console.log(`   Project Name: ${projectName}`);
 
@@ -145,7 +188,10 @@ async function seed() {
       .returning();
 
     // Generate traces for this session
-    const numTraces = randomBetween(CONFIG.tracesPerSession.min, CONFIG.tracesPerSession.max);
+    const numTraces = randomBetween(
+      CONFIG.tracesPerSession.min,
+      CONFIG.tracesPerSession.max,
+    );
     const traceData: NewTrace[] = [];
 
     let traceTime = sessionDate;

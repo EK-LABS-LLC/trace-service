@@ -65,12 +65,8 @@
           "name": "api_keys_project_id_projects_id_fk",
           "tableFrom": "api_keys",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -150,12 +146,8 @@
           "name": "sessions_project_id_projects_id_fk",
           "tableFrom": "sessions",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -251,16 +243,12 @@
       "indexes": {
         "subscriptions_stripe_customer_id_unique": {
           "name": "subscriptions_stripe_customer_id_unique",
-          "columns": [
-            "stripe_customer_id"
-          ],
+          "columns": ["stripe_customer_id"],
           "isUnique": true
         },
         "subscriptions_stripe_subscription_id_unique": {
           "name": "subscriptions_stripe_subscription_id_unique",
-          "columns": [
-            "stripe_subscription_id"
-          ],
+          "columns": ["stripe_subscription_id"],
           "isUnique": true
         }
       },
@@ -269,12 +257,8 @@
           "name": "subscriptions_user_id_user_id_fk",
           "tableFrom": "subscriptions",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -424,18 +408,12 @@
       "indexes": {
         "traces_project_timestamp_idx": {
           "name": "traces_project_timestamp_idx",
-          "columns": [
-            "project_id",
-            "timestamp"
-          ],
+          "columns": ["project_id", "timestamp"],
           "isUnique": false
         },
         "traces_project_session_idx": {
           "name": "traces_project_session_idx",
-          "columns": [
-            "project_id",
-            "session_id"
-          ],
+          "columns": ["project_id", "session_id"],
           "isUnique": false
         }
       },
@@ -444,12 +422,8 @@
           "name": "traces_project_id_projects_id_fk",
           "tableFrom": "traces",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -457,12 +431,8 @@
           "name": "traces_session_id_sessions_id_fk",
           "tableFrom": "traces",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -515,24 +485,17 @@
       "indexes": {
         "user_projects_user_idx": {
           "name": "user_projects_user_idx",
-          "columns": [
-            "user_id"
-          ],
+          "columns": ["user_id"],
           "isUnique": false
         },
         "user_projects_project_idx": {
           "name": "user_projects_project_idx",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": false
         },
         "user_projects_user_project_unique_idx": {
           "name": "user_projects_user_project_unique_idx",
-          "columns": [
-            "user_id",
-            "project_id"
-          ],
+          "columns": ["user_id", "project_id"],
           "isUnique": true
         }
       },
@@ -541,12 +504,8 @@
           "name": "user_projects_user_id_user_id_fk",
           "tableFrom": "user_projects",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -554,12 +513,8 @@
           "name": "user_projects_project_id_projects_id_fk",
           "tableFrom": "user_projects",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -671,12 +626,8 @@
           "name": "account_user_id_user_id_fk",
           "tableFrom": "account",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -750,9 +701,7 @@
       "indexes": {
         "auth_session_token_unique": {
           "name": "auth_session_token_unique",
-          "columns": [
-            "token"
-          ],
+          "columns": ["token"],
           "isUnique": true
         }
       },
@@ -761,12 +710,8 @@
           "name": "auth_session_user_id_user_id_fk",
           "tableFrom": "auth_session",
           "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -841,16 +786,12 @@
       "indexes": {
         "user_email_unique": {
           "name": "user_email_unique",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         },
         "user_stripe_customer_id_unique": {
           "name": "user_stripe_customer_id_unique",
-          "columns": [
-            "stripe_customer_id"
-          ],
+          "columns": ["stripe_customer_id"],
           "isUnique": true
         }
       },

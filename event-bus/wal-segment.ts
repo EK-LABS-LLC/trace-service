@@ -21,7 +21,11 @@ export class WALSegment {
 
   constructor(walDir: string, startSequence: number) {
     this.startSequence = startSequence;
-    this.path = join(walDir, "segments", `${formatSequence(startSequence)}.ndjson`);
+    this.path = join(
+      walDir,
+      "segments",
+      `${formatSequence(startSequence)}.ndjson`,
+    );
   }
 
   /**

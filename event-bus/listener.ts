@@ -18,7 +18,7 @@ export class TraceStreamListener {
   constructor(
     private readonly config: WALConfig,
     private readonly checkpoint: WALCheckpoint,
-    private readonly maxRetries: number = 3
+    private readonly maxRetries: number = 3,
   ) {
     this.dlq = new DeadLetterQueue(config.walDir + "/dead-letter");
   }
@@ -85,13 +85,13 @@ export class TraceStreamListener {
             this.retryCount.set(record.sequence, retries + 1);
             console.error(
               `Trace processing error (attempt ${retries + 1}/${this.maxRetries}):`,
-              err
+              err,
             );
             break;
           } else {
             console.error(
               `Trace processing failed after ${this.maxRetries} retries, sending to DLQ:`,
-              err
+              err,
             );
             await this.dlq.write(record, String(err), this.maxRetries);
             this.retryCount.delete(record.sequence);

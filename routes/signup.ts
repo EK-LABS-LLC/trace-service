@@ -1,6 +1,10 @@
 import type { Context } from "hono";
 import { db } from "../db";
-import { AuthServiceError, signupWithProject, type SignupWithProjectInput } from "../services/auth";
+import {
+  AuthServiceError,
+  signupWithProject,
+  type SignupWithProjectInput,
+} from "../services/auth";
 
 export async function handleSignupWithProject(c: Context): Promise<Response> {
   let body: SignupWithProjectInput;
