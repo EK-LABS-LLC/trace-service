@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { storage } from "../db/sqlite";
+import { storage } from "../db";
 import { ingestTraces, queryTraces, getTrace } from "../services/traces";
 import { ZodError } from "zod";
 import { traceQuerySchema, batchTraceSchema } from "../shared/validation";

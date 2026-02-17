@@ -7,7 +7,6 @@ import type {
   TraceQueryFilters,
   TraceQueryResult,
 } from "./adapter";
-import { db } from "./index";
 
 /**
  * PostgreSQL implementation of the StorageAdapter interface.
@@ -22,6 +21,23 @@ export class PostgresStorage implements StorageAdapter {
       .values({ ...trace, projectId })
       .returning();
     return result[0]!;
+  }
+
+  async insertTraceIdempotent(projectId: string, trace: NewTrace): Promise<Trace> {
+    const inserted = await this.db
+      .insert(traces)
+      .values({ ...trace, projectId })
+      .onConflictDoNothing({ target: traces.traceId })
+      .returning();
+    if (inserted[0]) {
+      return inserted[0];
+    }
+
+    const existing = await this.getTrace(trace.traceId!, projectId);
+    if (!existing) {
+      throw new Error(`Idempotent insert failed to find trace ${trace.traceId}`);
+    }
+    return existing;
   }
 
   async getTrace(traceId: string, projectId: string): Promise<Trace | null> {
@@ -144,5 +160,3 @@ export class PostgresStorage implements StorageAdapter {
       .orderBy(sql`${traces.timestamp} ASC`);
   }
 }
-
-export const storage = new PostgresStorage(db);

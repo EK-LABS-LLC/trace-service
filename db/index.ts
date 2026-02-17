@@ -1,22 +1,16 @@
-import { drizzle } from "drizzle-orm/bun-sqlite";
-import { Database } from "bun:sqlite";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 import { env } from "../config";
+import { PostgresStorage } from "./postgres";
+import type { StorageAdapter } from "./adapter";
 
-// Ensure .data directory exists
-const dbPath = env.DATABASE_URL.replace("file:", "");
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-mkdirSync(dirname(dbPath), { recursive: true });
-
-const sqlite = new Database(dbPath);
-// Enable WAL mode for better concurrency
-sqlite.exec("PRAGMA journal_mode = WAL");
-
-export const db = drizzle(sqlite, { schema });
+const sql = postgres(env.DATABASE_URL);
+export const db = drizzle(sql, { schema });
+export const storage: StorageAdapter = new PostgresStorage(db);
 
 export async function closeDb(): Promise<void> {
-  sqlite.close();
+  await sql.end({ timeout: 5 });
 }
 
 export type Database = typeof db;

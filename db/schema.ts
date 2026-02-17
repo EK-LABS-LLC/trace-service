@@ -1,27 +1,29 @@
 import {
-  sqliteTable,
+  pgTable,
   text,
   integer,
+  doublePrecision,
+  timestamp,
+  jsonb,
+  boolean,
   index,
   uniqueIndex,
-} from "drizzle-orm/sqlite-core";
+} from "drizzle-orm/pg-core";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
 
 export type ProjectRole = "admin" | "user";
 
-export const projects = sqliteTable("projects", {
+export const projects = pgTable("projects", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const apiKeys = sqliteTable("api_keys", {
+export const apiKeys = pgTable("api_keys", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -31,26 +33,22 @@ export const apiKeys = sqliteTable("api_keys", {
   keyHash: text("key_hash").notNull(),
   encryptedKey: text("encrypted_key").notNull(),
   name: text("name").notNull().default("Default Key"),
-  lastUsedAt: integer("last_used_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .defaultNow()
-    .notNull(),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const sessions = sqliteTable("sessions", {
+export const sessions = pgTable("sessions", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .defaultNow()
-    .notNull(),
-  metadata: text("metadata", { mode: "json" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  metadata: jsonb("metadata"),
 });
 
-export const traces = sqliteTable(
+export const traces = pgTable(
   "traces",
   {
     traceId: text("trace_id")
@@ -62,24 +60,22 @@ export const traces = sqliteTable(
     sessionId: text("session_id").references(() => sessions.id, {
       onDelete: "set null",
     }),
-    timestamp: integer("timestamp", { mode: "timestamp" })
-      .defaultNow()
-      .notNull(),
+    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
     latencyMs: integer("latency_ms").notNull(),
     provider: text("provider").notNull(),
     modelRequested: text("model_requested").notNull(),
     modelUsed: text("model_used"),
     providerRequestId: text("provider_request_id"),
-    requestBody: text("request_body", { mode: "json" }).notNull(),
-    responseBody: text("response_body", { mode: "json" }),
+    requestBody: jsonb("request_body").notNull(),
+    responseBody: jsonb("response_body"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
     outputText: text("output_text"),
     finishReason: text("finish_reason"),
     status: text("status").notNull(),
-    error: text("error", { mode: "json" }),
-    costCents: integer("cost_cents"), // Store as integer (cents * 100 for precision)
-    metadata: text("metadata", { mode: "json" }),
+    error: jsonb("error"),
+    costCents: doublePrecision("cost_cents"),
+    metadata: jsonb("metadata"),
   },
   (table) => [
     index("traces_project_timestamp_idx").on(table.projectId, table.timestamp),
@@ -96,7 +92,7 @@ export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 
-export const userProjects = sqliteTable(
+export const userProjects = pgTable(
   "user_projects",
   {
     id: text("id")
@@ -109,9 +105,7 @@ export const userProjects = sqliteTable(
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
     role: text("role").notNull().default("user"),
-    createdAt: integer("created_at", { mode: "timestamp" })
-      .defaultNow()
-      .notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index("user_projects_user_idx").on(table.userId),
@@ -129,7 +123,7 @@ export type NewUserProject = typeof userProjects.$inferInsert;
 export type Trace = typeof traces.$inferSelect;
 export type NewTrace = typeof traces.$inferInsert;
 
-export const subscriptions = sqliteTable("subscriptions", {
+export const subscriptions = pgTable("subscriptions", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -140,17 +134,11 @@ export const subscriptions = sqliteTable("subscriptions", {
   stripeSubscriptionId: text("stripe_subscription_id").unique(),
   stripePriceId: text("stripe_price_id"),
   status: text("status").notNull(),
-  currentPeriodStart: integer("current_period_start", { mode: "timestamp" }),
-  currentPeriodEnd: integer("current_period_end", { mode: "timestamp" }),
-  cancelAtPeriodEnd: integer("cancel_at_period_end", { mode: "boolean" })
-    .notNull()
-    .default(false),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .defaultNow()
-    .notNull(),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .defaultNow()
-    .notNull(),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export type Subscription = typeof subscriptions.$inferSelect;

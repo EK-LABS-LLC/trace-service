@@ -167,7 +167,11 @@ async function seed() {
   console.log(`   Project Name: ${projectName}`);
 
   // Create API key
-  await db.insert(apiKeys).values({ projectId: project!.id, keyHash });
+  await db.insert(apiKeys).values({
+    projectId: project!.id,
+    keyHash,
+    encryptedKey: apiKey,
+  });
   console.log(`   API Key: ${apiKey}`);
   console.log("");
 

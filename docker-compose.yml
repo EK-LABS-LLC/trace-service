@@ -1,12 +1,31 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: pulse
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+    volumes:
+      - ../.data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   trace-service:
     build:
       context: ..
       dockerfile: trace-service/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: file:.data/pulse.db
+      DATABASE_URL: postgresql://pulse:pulse@postgres:5432/pulse
       PORT: 3000
       NODE_ENV: development
       ADMIN_KEY: dev-admin-key
@@ -17,4 +36,4 @@ services:
       FRONTEND_URL: http://localhost:5173
       ENCRYPTION_KEY: 8d2a52c8333cabd7d3e49fd6a60da5574f5722d64fc4a2b211390a1634553a03
     volumes:
-      - ../.data:/app/.data
+      - ./.data:/app/.data

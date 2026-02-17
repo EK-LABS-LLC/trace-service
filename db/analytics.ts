@@ -186,12 +186,10 @@ export async function getCostOverTime(
 ): Promise<CostDataPoint[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
-  // SQLite timestamp is stored as milliseconds since epoch
-  // Use strftime to format dates: %Y-%m-%d %H:00:00 for hour, %Y-%m-%d for day
   let periodExpr: ReturnType<typeof sql>;
   switch (groupBy) {
     case "hour":
-      periodExpr = sql`strftime('%Y-%m-%d %H:00:00', datetime(${traces.timestamp} / 1000, 'unixepoch'))`;
+      periodExpr = sql`to_char(date_trunc('hour', ${traces.timestamp}), 'YYYY-MM-DD HH24:00:00')`;
       break;
     case "model":
       periodExpr = sql`${traces.modelRequested}`;
@@ -201,7 +199,7 @@ export async function getCostOverTime(
       break;
     case "day":
     default:
-      periodExpr = sql`strftime('%Y-%m-%d', datetime(${traces.timestamp} / 1000, 'unixepoch'))`;
+      periodExpr = sql`to_char(date_trunc('day', ${traces.timestamp}), 'YYYY-MM-DD')`;
       break;
   }
 
@@ -356,8 +354,8 @@ export async function getCostOverTimeByProvider(
   const conditions = buildDateConditions(projectId, dateRange);
   const periodExpr =
     groupBy === "hour"
-      ? sql`strftime('%Y-%m-%d %H:00:00', datetime(${traces.timestamp} / 1000, 'unixepoch'))`
-      : sql`strftime('%Y-%m-%d', datetime(${traces.timestamp} / 1000, 'unixepoch'))`;
+      ? sql`to_char(date_trunc('hour', ${traces.timestamp}), 'YYYY-MM-DD HH24:00:00')`
+      : sql`to_char(date_trunc('day', ${traces.timestamp}), 'YYYY-MM-DD')`;
 
   const result = await db
     .select({

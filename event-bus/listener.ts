@@ -1,5 +1,5 @@
 import { batchTraceSchema } from "../shared/validation";
-import { storage } from "../db/sqlite";
+import { storage } from "../db";
 import { ingestTraceBatchIdempotent } from "../services/traces";
 import type { TraceIngestEventPayload } from "./subjects";
 import { WALReader, WALIndex, type WALConfig } from "./wal";

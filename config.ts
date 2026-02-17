@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().default("file:.data/pulse.db"),
+  DATABASE_URL: z.string().default("postgresql://pulse:pulse@localhost:5432/pulse"),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -41,6 +41,17 @@ function parseEnv() {
     });
     process.exit(1);
   }
+
+  if (
+    !result.data.DATABASE_URL.startsWith("postgres://") &&
+    !result.data.DATABASE_URL.startsWith("postgresql://")
+  ) {
+    console.error(
+      "Invalid DATABASE_URL: PostgreSQL URL required (expected postgres:// or postgresql://)"
+    );
+    process.exit(1);
+  }
+
   return result.data;
 }
 

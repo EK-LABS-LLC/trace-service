@@ -1,6 +1,6 @@
 {
-  "id": "8d70e953-0d10-4b78-bb01-ffe2f12511d7",
-  "prevId": "00000000-0000-0000-0000-000000000000",
+  "id": "5059b194-afff-43b8-910f-6de7df4cd820",
+  "prevId": "8d70e953-0d10-4b78-bb01-ffe2f12511d7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -379,7 +379,7 @@
         },
         "cost_cents": {
           "name": "cost_cents",
-          "type": "integer",
+          "type": "double precision",
           "primaryKey": false,
           "notNull": false
         },

@@ -1,0 +1,1 @@
+ALTER TABLE "traces" ALTER COLUMN "cost_cents" SET DATA TYPE double precision;
