@@ -1,35 +1,36 @@
 import { WALWriter, WALIndex } from "./wal";
 import { WALCheckpoint } from "./checkpoint";
-import type { TraceIngestEventPayload } from "./subjects";
+import type { SpanIngestEventPayload, TraceIngestEventPayload } from "./subjects";
 import { env } from "../config";
 
-let walWriter: WALWriter | null = null;
-let walIndex: WALIndex | null = null;
-let walCheckpoint: WALCheckpoint | null = null;
+let traceWalWriter: WALWriter | null = null;
+let traceWalIndex: WALIndex | null = null;
+let traceWalCheckpoint: WALCheckpoint | null = null;
+
+let spanWalWriter: WALWriter | null = null;
+let spanWalIndex: WALIndex | null = null;
+let spanWalCheckpoint: WALCheckpoint | null = null;
 
 export function getEventBus(): {
-  publish: (subject: string, payload: unknown) => Promise<void>;
+  publish: (subject: string, payload: TraceIngestEventPayload) => Promise<void>;
 } {
-  if (!walWriter) {
+  if (!traceWalWriter) {
     throw new Error("WAL not initialized. Call startWAL() first.");
   }
   return {
-    publish: async (_subject: string, payload: unknown) => {
-      await walWriter!.append(payload as TraceIngestEventPayload);
+    publish: async (_subject: string, payload: TraceIngestEventPayload) => {
+      await traceWalWriter!.append(payload);
     },
   };
 }
 
 export async function startWAL(): Promise<void> {
-  // Create index
-  walIndex = new WALIndex(env.WAL_DIR);
+  traceWalIndex = new WALIndex(env.WAL_DIR);
 
-  // Create checkpoint
-  walCheckpoint = new WALCheckpoint(env.WAL_DIR);
-  await walCheckpoint.load();
+  traceWalCheckpoint = new WALCheckpoint(env.WAL_DIR);
+  await traceWalCheckpoint.load();
 
-  // Create writer
-  walWriter = new WALWriter(
+  traceWalWriter = new WALWriter(
     {
       walDir: env.WAL_DIR,
       maxSegmentSize: env.WAL_MAX_SEGMENT_SIZE,
@@ -39,24 +40,72 @@ export async function startWAL(): Promise<void> {
       maxSegments: env.WAL_MAX_SEGMENTS,
       maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
     },
-    walIndex,
+    traceWalIndex,
   );
 
-  await walWriter.initialize();
+  await traceWalWriter.initialize();
 }
 
 export async function stopWAL(): Promise<void> {
-  if (walWriter) {
-    await walWriter.close();
-    walWriter = null;
+  if (traceWalWriter) {
+    await traceWalWriter.close();
+    traceWalWriter = null;
   }
 }
 
-// Export for listener access
+export function getSpanEventBus(): {
+  publish: (subject: string, payload: SpanIngestEventPayload) => Promise<void>;
+} {
+  if (!spanWalWriter) {
+    throw new Error("Span WAL not initialized. Call startSpanWAL() first.");
+  }
+  return {
+    publish: async (_subject: string, payload: SpanIngestEventPayload) => {
+      await spanWalWriter!.append(payload);
+    },
+  };
+}
+
+export async function startSpanWAL(): Promise<void> {
+  spanWalIndex = new WALIndex(env.WAL_SPAN_DIR);
+  spanWalCheckpoint = new WALCheckpoint(env.WAL_SPAN_DIR);
+  await spanWalCheckpoint.load();
+
+  spanWalWriter = new WALWriter(
+    {
+      walDir: env.WAL_SPAN_DIR,
+      maxSegmentSize: env.WAL_MAX_SEGMENT_SIZE,
+      maxSegmentAge: env.WAL_MAX_SEGMENT_AGE,
+      maxSegmentLines: env.WAL_MAX_SEGMENT_LINES,
+      fsyncEvery: env.WAL_FSYNC_EVERY,
+      maxSegments: env.WAL_MAX_SEGMENTS,
+      maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
+    },
+    spanWalIndex,
+  );
+
+  await spanWalWriter.initialize();
+}
+
+export async function stopSpanWAL(): Promise<void> {
+  if (spanWalWriter) {
+    await spanWalWriter.close();
+    spanWalWriter = null;
+  }
+}
+
 export function getWALIndex(): WALIndex | null {
-  return walIndex;
+  return traceWalIndex;
 }
 
 export function getWALCheckpoint(): WALCheckpoint | null {
-  return walCheckpoint;
+  return traceWalCheckpoint;
+}
+
+export function getSpanWALIndex(): WALIndex | null {
+  return spanWalIndex;
+}
+
+export function getSpanWALCheckpoint(): WALCheckpoint | null {
+  return spanWalCheckpoint;
 }

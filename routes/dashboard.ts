@@ -21,6 +21,12 @@ import {
 import { handleBatchTraces, getTraces, getTraceById } from "./traces";
 import { handleGetSessionTraces } from "./sessions";
 import { handleGetAnalytics } from "./analytics";
+import {
+  handleBatchSpans,
+  handleAsyncSpan,
+  getSpans,
+  getSpanById,
+} from "./spans";
 
 const dashboard = new Hono();
 
@@ -73,5 +79,9 @@ dashboard.get(
   handleGetSessionTraces,
 );
 dashboard.get("/analytics", projectContextMiddleware, handleGetAnalytics);
+dashboard.post("/spans/batch", projectContextMiddleware, handleBatchSpans);
+dashboard.post("/spans/async", projectContextMiddleware, handleAsyncSpan);
+dashboard.get("/spans", projectContextMiddleware, getSpans);
+dashboard.get("/spans/:id", projectContextMiddleware, getSpanById);
 
 export { dashboard };

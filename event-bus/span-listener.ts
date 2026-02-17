@@ -1,13 +1,13 @@
-import { batchTraceSchema } from "../shared/validation";
+import { batchSpanSchema } from "../shared/validation";
 import { storage } from "../db";
-import { ingestTraceBatchIdempotent } from "../services/traces";
-import type { TraceIngestEventPayload } from "./subjects";
+import { ingestSpanBatchIdempotent } from "../services/spans";
 import { WALReader, WALIndex, type WALConfig } from "./wal";
 import { WALCheckpoint } from "./checkpoint";
 import { DeadLetterQueue } from "./dead-letter";
 import type { WALRecord } from "./wal-record";
+import type { SpanIngestEventPayload } from "./subjects";
 
-export class TraceStreamListener {
+export class SpanStreamListener {
   private reader?: WALReader;
   private stopped = false;
   private isProcessing = false;
@@ -29,9 +29,6 @@ export class TraceStreamListener {
     this.reader = new WALReader(this.config, this.checkpoint, index);
     this.stopped = false;
 
-    console.log("WAL trace listener started");
-
-    // Poll for new records
     this.processingTimer = setInterval(() => {
       void this.processBatch();
     }, 100);
@@ -67,8 +64,6 @@ export class TraceStreamListener {
         return;
       }
 
-      console.log(`[WAL listener] Processing ${records.length} records`);
-
       let maxProcessedSequence: number | null = null;
 
       for (const record of records) {
@@ -83,16 +78,8 @@ export class TraceStreamListener {
 
           if (retries < this.maxRetries) {
             this.retryCount.set(record.sequence, retries + 1);
-            console.error(
-              `Trace processing error (attempt ${retries + 1}/${this.maxRetries}):`,
-              err,
-            );
             break;
           } else {
-            console.error(
-              `Trace processing failed after ${this.maxRetries} retries, sending to DLQ:`,
-              err,
-            );
             await this.dlq.write(record, String(err), this.maxRetries);
             this.retryCount.delete(record.sequence);
             maxProcessedSequence = record.sequence;
@@ -103,23 +90,19 @@ export class TraceStreamListener {
       if (maxProcessedSequence !== null) {
         await this.reader.markNextSequence(maxProcessedSequence + 1);
       }
-    } catch (err) {
-      console.error("WAL listener error:", err);
     } finally {
       this.isProcessing = false;
     }
   }
 
   private async processRecord(record: WALRecord): Promise<void> {
-    const payload = record.payload as TraceIngestEventPayload;
+    const payload = record.payload as SpanIngestEventPayload;
 
     if (!payload.projectId) {
-      throw new Error("Trace event missing projectId");
+      throw new Error("Span event missing projectId");
     }
 
-    const traces = batchTraceSchema.parse(payload.traces);
-
-    // Use idempotent insert for WAL processing (handles crash recovery duplicates)
-    await ingestTraceBatchIdempotent(payload.projectId, traces, storage);
+    const spans = batchSpanSchema.parse(payload.spans);
+    await ingestSpanBatchIdempotent(payload.projectId, spans, storage);
   }
 }

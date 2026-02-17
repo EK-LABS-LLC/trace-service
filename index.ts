@@ -12,14 +12,26 @@ import {
   getTraces,
   getTraceById,
 } from "./routes/traces";
+import {
+  handleBatchSpans,
+  handleAsyncSpan,
+  getSpans,
+  getSpanById,
+} from "./routes/spans";
 import { handleGetSessionTraces } from "./routes/sessions";
 import { handleGetAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
 import { stripeRoutes } from "./routes/stripe";
-import { startWAL, stopWAL, getWALCheckpoint } from "./event-bus/client";
+import {
+  startWAL,
+  stopWAL,
+  startSpanWAL,
+  stopSpanWAL,
+} from "./event-bus/client";
 import { TraceStreamListener } from "./event-bus/listener";
+import { SpanStreamListener } from "./event-bus/span-listener";
 import { WALCheckpoint } from "./event-bus/checkpoint";
 
 const app = new Hono();
@@ -85,6 +97,10 @@ app.post("/v1/traces/batch", authMiddleware, handleBatchTraces);
 app.post("/v1/traces/async", authMiddleware, handleAsyncTrace);
 app.get("/v1/traces", authMiddleware, getTraces);
 app.get("/v1/traces/:id", authMiddleware, getTraceById);
+app.post("/v1/spans/batch", authMiddleware, handleBatchSpans);
+app.post("/v1/spans/async", authMiddleware, handleAsyncSpan);
+app.get("/v1/spans", authMiddleware, getSpans);
+app.get("/v1/spans/:id", authMiddleware, getSpanById);
 app.get("/v1/sessions/:id", authMiddleware, handleGetSessionTraces);
 app.get("/v1/analytics", authMiddleware, handleGetAnalytics);
 
@@ -94,6 +110,7 @@ const server = Bun.serve({
 });
 
 await startWAL();
+await startSpanWAL();
 
 const walCheckpoint = new WALCheckpoint(env.WAL_DIR);
 await walCheckpoint.load();
@@ -113,6 +130,24 @@ const traceListener = new TraceStreamListener(
 );
 void traceListener.start();
 
+const spanCheckpoint = new WALCheckpoint(env.WAL_SPAN_DIR);
+await spanCheckpoint.load();
+
+const spanListener = new SpanStreamListener(
+  {
+    walDir: env.WAL_SPAN_DIR,
+    maxSegmentSize: env.WAL_MAX_SEGMENT_SIZE,
+    maxSegmentAge: env.WAL_MAX_SEGMENT_AGE,
+    maxSegmentLines: env.WAL_MAX_SEGMENT_LINES,
+    fsyncEvery: env.WAL_FSYNC_EVERY,
+    maxSegments: env.WAL_MAX_SEGMENTS,
+    maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
+  },
+  spanCheckpoint,
+  env.WAL_MAX_RETRIES,
+);
+void spanListener.start();
+
 console.log(`Pulse server running on port ${env.PORT}`);
 
 const shutdown = async () => {
@@ -126,7 +161,9 @@ const shutdown = async () => {
   try {
     server.stop();
     traceListener.stop();
+    spanListener.stop();
     await stopWAL();
+    await stopSpanWAL();
     await closeDb();
     clearTimeout(shutdownTimeout);
     process.exit(0);

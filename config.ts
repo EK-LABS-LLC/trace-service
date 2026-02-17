@@ -20,6 +20,7 @@ const envSchema = z.object({
 
   // WAL Configuration
   WAL_DIR: z.string().default(".data/wal"),
+  WAL_SPAN_DIR: z.string().default(".data/wal-spans"),
   WAL_MAX_SEGMENT_SIZE: z.coerce.number().default(100 * 1024 * 1024), // 100MB
   WAL_MAX_SEGMENT_AGE: z.coerce.number().default(24 * 60 * 60 * 1000), // 24 hours
   WAL_MAX_SEGMENT_LINES: z.coerce.number().default(100000),

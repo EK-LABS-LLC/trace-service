@@ -4,7 +4,7 @@ import { WALIndex } from "./wal-index";
 import { WALSegment } from "./wal-segment";
 import type { WALConfig } from "./wal-types";
 import { toNumber } from "./wal-types";
-import type { TraceIngestEventPayload } from "./subjects";
+import type { WALPayload } from "./wal-record";
 
 export class WALWriter {
   private config: WALConfig;
@@ -35,7 +35,7 @@ export class WALWriter {
     }
   }
 
-  async append(payload: TraceIngestEventPayload): Promise<number> {
+  async append(payload: WALPayload): Promise<number> {
     if (!this.currentSegment) {
       throw new Error("WALWriter not initialized");
     }

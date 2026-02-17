@@ -123,6 +123,42 @@ export type NewUserProject = typeof userProjects.$inferInsert;
 export type Trace = typeof traces.$inferSelect;
 export type NewTrace = typeof traces.$inferInsert;
 
+export const spans = pgTable(
+  "spans",
+  {
+    spanId: text("span_id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    sessionId: text("session_id").notNull(),
+    parentSpanId: text("parent_span_id"),
+    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
+    durationMs: integer("duration_ms"),
+    source: text("source").notNull(),
+    kind: text("kind").notNull(),
+    eventType: text("event_type").notNull(),
+    status: text("status").notNull(),
+    toolUseId: text("tool_use_id"),
+    toolName: text("tool_name"),
+    toolInput: jsonb("tool_input"),
+    toolResponse: jsonb("tool_response"),
+    error: jsonb("error"),
+    isInterrupt: boolean("is_interrupt"),
+    cwd: text("cwd"),
+    model: text("model"),
+    agentName: text("agent_name"),
+    metadata: jsonb("metadata"),
+  },
+  (table) => [
+    index("spans_project_timestamp_idx").on(table.projectId, table.timestamp),
+    index("spans_project_session_idx").on(table.projectId, table.sessionId),
+    index("spans_project_kind_idx").on(table.projectId, table.kind),
+  ],
+);
+
+export type Span = typeof spans.$inferSelect;
+export type NewSpan = typeof spans.$inferInsert;
+
 export const subscriptions = pgTable("subscriptions", {
   id: text("id")
     .primaryKey()

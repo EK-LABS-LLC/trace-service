@@ -1,10 +1,12 @@
-import type { TraceIngestEventPayload } from "./subjects";
+import type { SpanIngestEventPayload, TraceIngestEventPayload } from "./subjects";
+
+export type WALPayload = TraceIngestEventPayload | SpanIngestEventPayload;
 
 export interface WALRecord {
   sequence: number;
   /** Unix timestamp in milliseconds */
   timestamp: number;
-  payload: TraceIngestEventPayload;
+  payload: WALPayload;
 }
 
 export function encodeRecord(record: WALRecord): string {
