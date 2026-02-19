@@ -1,4 +1,4 @@
-.PHONY: install dev up down down-v logs db-up db-down migrate migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-watch clean
+.PHONY: install dev dev-scale up down down-v logs db-up db-down migrate migrate-scale migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-watch build build-scale clean
 
 db-up:
 	@echo "SQLite backend enabled; no external DB to start."
@@ -11,7 +11,11 @@ install:
 
 # Local development (SQLite + app)
 dev: migrate
-	bun run index.ts
+	bun run pulse.ts
+
+# Scale mode (Postgres + partitioned listeners)
+dev-scale:
+	PULSE_MODE=scale bun run pulse-scale.ts
 
 # Full stack in Docker (trace-service only)
 up:
@@ -29,6 +33,9 @@ logs:
 
 migrate:
 	bun run db:migrate
+
+migrate-scale:
+	PULSE_MODE=scale bun run db:migrate:scale
 
 migrate-gen:
 	bun run db:generate
@@ -107,6 +114,12 @@ test-e2e:
 
 test-watch:
 	bun test --watch --env-file=.env.test
+
+build:
+	bun run build:pulse
+
+build-scale:
+	bun run build:pulse-scale
 
 clean:
 	rm -rf node_modules

@@ -1,0 +1,10 @@
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  schema: "./db/schema-scale.ts",
+  out: "./drizzle-scale",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL || "postgresql://pulse:pulse@localhost:5432/pulse",
+  },
+});

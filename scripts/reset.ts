@@ -1,36 +1,43 @@
-import { db } from "../db";
-import {
-  apiKeys,
-  userProjects,
-  traces,
-  sessions,
-  projects,
-} from "../db/schema";
+if (!process.env.PULSE_MODE) {
+  process.env.PULSE_MODE = "single";
+}
+
+const { initializeRuntimeServices } = await import("../runtime/services");
+if (process.env.PULSE_MODE === "scale") {
+  const { createScaleRuntimeServices } = await import("../runtime/modes/scale");
+  initializeRuntimeServices(createScaleRuntimeServices());
+} else {
+  const { createSingleRuntimeServices } = await import("../runtime/modes/single");
+  initializeRuntimeServices(createSingleRuntimeServices());
+}
+
+const { db } = await import("../db");
+const { apiKeys, userProjects, traces, sessions, projects } = await import("../db/schema");
 
 /**
  * Reset database - clears all data from all tables.
  * This is useful for development/testing to start fresh.
  */
 async function reset() {
-  console.log("⚠️  Clearing all database tables...");
+  console.log("Clearing all database tables...");
 
-  // Delete in correct order due to foreign key constraints
+  // Delete in correct order due to foreign key constraints.
   await db.delete(traces);
-  console.log("  ✓ Cleared traces");
+  console.log("  cleared traces");
 
   await db.delete(sessions);
-  console.log("  ✓ Cleared sessions");
+  console.log("  cleared sessions");
 
   await db.delete(apiKeys);
-  console.log("  ✓ Cleared api_keys");
+  console.log("  cleared api_keys");
 
   await db.delete(userProjects);
-  console.log("  ✓ Cleared user_projects");
+  console.log("  cleared user_projects");
 
   await db.delete(projects);
-  console.log("  ✓ Cleared projects");
+  console.log("  cleared projects");
 
-  console.log("✅ Database reset complete!");
+  console.log("Database reset complete");
 }
 
 reset()
@@ -38,6 +45,6 @@ reset()
     process.exit(0);
   })
   .catch((err) => {
-    console.error("❌ Reset failed:", err);
+    console.error("Reset failed:", err);
     process.exit(1);
   });

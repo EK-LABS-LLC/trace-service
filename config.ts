@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 const envSchema = z.object({
+  PULSE_MODE: z.enum(["single", "scale"]).default("single"),
   DATABASE_PATH: z.string().default(".data/pulse.db"),
+  DATABASE_URL: z.string().optional(),
   PORT: z.coerce.number().default(3000),
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -29,6 +31,8 @@ const envSchema = z.object({
   WAL_PROCESSING_INTERVAL_MS: z.coerce.number().default(100),
   WAL_MAX_RETRIES: z.coerce.number().default(3),
   WAL_DLQ_DIR: z.string().default(".data/wal/dead-letter"),
+  TRACE_WAL_PARTITIONS: z.coerce.number().int().min(1).optional(),
+  SPAN_WAL_PARTITIONS: z.coerce.number().int().min(1).optional(),
 });
 
 function parseEnv() {
@@ -41,7 +45,33 @@ function parseEnv() {
     process.exit(1);
   }
 
-  return result.data;
+  const env = result.data;
+
+  if (env.PULSE_MODE === "scale") {
+    if (!env.DATABASE_URL) {
+      console.error(
+        "Invalid environment configuration: DATABASE_URL is required in scale mode",
+      );
+      process.exit(1);
+    }
+
+    if (
+      !env.DATABASE_URL.startsWith("postgres://") &&
+      !env.DATABASE_URL.startsWith("postgresql://")
+    ) {
+      console.error(
+        "Invalid DATABASE_URL: PostgreSQL URL required (expected postgres:// or postgresql://)",
+      );
+      process.exit(1);
+    }
+  }
+
+  return {
+    ...env,
+    DATABASE_URL: env.DATABASE_URL ?? "",
+    TRACE_WAL_PARTITIONS: env.TRACE_WAL_PARTITIONS ?? (env.PULSE_MODE === "scale" ? 4 : 1),
+    SPAN_WAL_PARTITIONS: env.SPAN_WAL_PARTITIONS ?? (env.PULSE_MODE === "scale" ? 4 : 1),
+  };
 }
 
 export const env = parseEnv();
