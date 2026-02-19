@@ -2,7 +2,7 @@
 
 ## Modes
 
-- `pulse` (single mode): local SQLite file (`.data/pulse.db`), single-node.
+- `pulse` (single mode): local SQLite file (`~/.pulse/.data/pulse.db` by default), single-node.
 - `pulse-scale` (scale mode): Postgres plus partitioned WAL listeners.
 
 ## Single Mode Runbook
@@ -11,7 +11,6 @@
 
 ```bash
 export PULSE_MODE=single
-export DATABASE_PATH=.data/pulse.db
 export PORT=3000
 export BETTER_AUTH_SECRET='replace-with-32+char-secret'
 export BETTER_AUTH_URL='http://localhost:3000'

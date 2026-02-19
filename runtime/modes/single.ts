@@ -18,7 +18,12 @@ export function createSingleRuntimeServices(): RuntimeServices {
 
   const db = drizzle(sqlite, { schema });
   const storage = new SqliteStorage(db);
-  const auth = createAuth(db, "sqlite", authSchema);
+  const auth = createAuth(db, "sqlite", {
+    user: authSchema.user,
+    session: authSchema.authSession,
+    account: authSchema.account,
+    verification: authSchema.verification,
+  });
 
   return {
     db,

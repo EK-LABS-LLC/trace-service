@@ -11,7 +11,12 @@ export function createScaleRuntimeServices(): RuntimeServices {
   const sql = postgres(env.DATABASE_URL);
   const db = drizzle(sql, { schema });
   const storage = new PostgresStorage(db);
-  const auth = createAuth(db, "pg", authSchema);
+  const auth = createAuth(db, "pg", {
+    user: authSchema.user,
+    session: authSchema.authSession,
+    account: authSchema.account,
+    verification: authSchema.verification,
+  });
 
   return {
     db,

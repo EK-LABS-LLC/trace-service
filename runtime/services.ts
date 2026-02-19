@@ -1,9 +1,13 @@
 import type { StorageAdapter } from "../db/adapter";
 
+type DrizzleAdapterDb =
+  Parameters<typeof import("better-auth/adapters/drizzle").drizzleAdapter>[0];
+type BetterAuthInstance = ReturnType<typeof import("better-auth").betterAuth>;
+
 export interface RuntimeServices {
-  db: any;
+  db: DrizzleAdapterDb;
   storage: StorageAdapter;
-  auth: any;
+  auth: BetterAuthInstance;
   schema: Record<string, any>;
   authSchema: Record<string, any>;
   dbProvider: "sqlite" | "pg";

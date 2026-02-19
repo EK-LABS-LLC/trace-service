@@ -104,11 +104,11 @@ test:
 # This target starts the app, waits for health, runs tests, and cleans up.
 test-e2e:
 	@set -e; \
-	DATABASE_PATH=.data/pulse.test.db WAL_DIR=.data/wal.test WAL_SPAN_DIR=.data/wal-spans.test bun run db:migrate; \
-	rm -rf .data/wal.test .data/wal-spans.test .data/pulse.test.db-shm .data/pulse.test.db-wal; \
-	DATABASE_PATH=.data/pulse.test.db WAL_DIR=.data/wal.test WAL_SPAN_DIR=.data/wal-spans.test TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse.ts > /tmp/trace-service-test.log 2>&1 & \
+	TEST_DATA_DIR=$$(mktemp -d /tmp/pulse-test-single.XXXXXX); \
+	DATABASE_PATH=$$TEST_DATA_DIR/pulse.test.db WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test bun run db:migrate; \
+	DATABASE_PATH=$$TEST_DATA_DIR/pulse.test.db WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse.ts > /tmp/trace-service-test.log 2>&1 & \
 	PID=$$!; \
-	trap 'kill $$PID 2>/dev/null || true; wait $$PID 2>/dev/null || true' EXIT; \
+	trap 'kill $$PID 2>/dev/null || true; wait $$PID 2>/dev/null || true; rm -rf $$TEST_DATA_DIR' EXIT; \
 	for i in $$(seq 1 40); do \
 		if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then \
 			break; \
@@ -120,7 +120,7 @@ test-e2e:
 			exit 1; \
 		fi; \
 	done; \
-	bun test --env-file=.env.test
+	DATABASE_PATH=$$TEST_DATA_DIR/pulse.test.db WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test bun test --env-file=.env.test
 
 test-watch:
 	bun test --watch --env-file=.env.test
@@ -136,9 +136,10 @@ release-artifacts:
 
 test-e2e-scale:
 	@set -e; \
+	TEST_DATA_DIR=$$(mktemp -d /tmp/pulse-test-scale.XXXXXX); \
 	PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml up -d postgres; \
 	PID=""; \
-	trap 'if [ -n "$$PID" ]; then kill $$PID 2>/dev/null || true; wait $$PID 2>/dev/null || true; fi; PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml down -v >/dev/null 2>&1 || true' EXIT; \
+	trap 'if [ -n "$$PID" ]; then kill $$PID 2>/dev/null || true; wait $$PID 2>/dev/null || true; fi; PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml down -v >/dev/null 2>&1 || true; rm -rf $$TEST_DATA_DIR' EXIT; \
 	for i in $$(seq 1 60); do \
 		if PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml exec -T postgres pg_isready -U pulse -d pulse >/dev/null 2>&1; then \
 			break; \
@@ -150,8 +151,7 @@ test-e2e-scale:
 		fi; \
 	done; \
 	PULSE_MODE=scale DATABASE_URL='$(SCALE_DATABASE_URL)' bun run db:migrate:scale; \
-	rm -rf .data/wal.test .data/wal-spans.test; \
-	PULSE_MODE=scale DATABASE_URL='$(SCALE_DATABASE_URL)' WAL_DIR=.data/wal.test WAL_SPAN_DIR=.data/wal-spans.test TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse-scale.ts > /tmp/trace-service-scale-test.log 2>&1 & \
+	PULSE_MODE=scale DATABASE_URL='$(SCALE_DATABASE_URL)' WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse-scale.ts > /tmp/trace-service-scale-test.log 2>&1 & \
 	PID=$$!; \
 	for i in $$(seq 1 40); do \
 		if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then \
@@ -164,7 +164,7 @@ test-e2e-scale:
 			exit 1; \
 		fi; \
 	done; \
-	bun test --env-file=.env.test
+	WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test bun test --env-file=.env.test
 
 clean:
 	rm -rf node_modules

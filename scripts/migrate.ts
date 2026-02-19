@@ -3,8 +3,10 @@ import { dirname } from "node:path";
 import { Database as BunSqliteDatabase } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { resolveDataPaths } from "../lib/data-paths";
 
-const databasePath = process.env.DATABASE_PATH ?? ".data/pulse.db";
+const dataPaths = resolveDataPaths(process.env);
+const databasePath = dataPaths.databasePath;
 
 mkdirSync(dirname(databasePath), { recursive: true });
 

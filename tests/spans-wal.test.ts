@@ -2,10 +2,11 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { authFetch, createTestProject, cleanupTestData } from "./setup";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { resolveDataPaths } from "../lib/data-paths";
 
 function readSpanWalFiles(): string[] {
   const walSpanDir =
-    process.env.WAL_SPAN_DIR ?? join(process.cwd(), ".data", "wal-spans");
+    process.env.WAL_SPAN_DIR ?? resolveDataPaths(process.env).walSpanDir;
   const segmentsDir = join(walSpanDir, "segments");
   if (!existsSync(segmentsDir)) return [];
 

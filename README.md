@@ -55,7 +55,9 @@ Required:
 Optional:
 
 - `PULSE_MODE` (`single` | `scale`, default `single`)
-- `DATABASE_PATH` (default `.data/pulse.db`)
+- `PULSE_HOME` (default `~/.pulse`)
+- `PULSE_DATA_DIR` (default `~/.pulse/.data`)
+- `DATABASE_PATH` (default `~/.pulse/.data/pulse.db`)
 - `DATABASE_URL` (required for `scale`, e.g. `postgresql://pulse:pulse@localhost:5432/pulse`)
 - `NODE_ENV` (`development` | `test` | `production`)
 - `ADMIN_KEY` (legacy/internal use)
@@ -65,7 +67,6 @@ Optional:
 Example (local):
 
 ```bash
-export DATABASE_PATH=.data/pulse.db
 export PORT=3000
 export BETTER_AUTH_SECRET='replace-with-32+char-secret'
 export BETTER_AUTH_URL='http://localhost:3000'
@@ -132,7 +133,7 @@ From `trace-service/`:
 docker compose up --build
 ```
 
-This starts trace-service (with local SQLite at `.data/pulse.db`) on `http://localhost:3000`. Run the dashboard separately from `../pulse-dashboard`.
+This starts trace-service on `http://localhost:3000`. By default it stores SQLite/WAL data under `~/.pulse/.data` unless overridden.
 
 Scale mode local Postgres helper:
 
