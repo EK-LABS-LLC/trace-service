@@ -93,7 +93,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
           files: |
-            dist/pulse-*
-            dist/pulse-scale-*
+            dist/pulse-linux-*
+            dist/pulse-darwin-*
+            dist/pulse-scale-linux-*
+            dist/pulse-scale-darwin-*
             dist/checksums.txt
           generate_release_notes: true
