@@ -1,29 +1,26 @@
 import {
-  pgTable,
+  sqliteTable,
   text,
   integer,
-  doublePrecision,
-  timestamp,
-  jsonb,
-  boolean,
+  real,
   index,
   uniqueIndex,
-} from "drizzle-orm/pg-core";
+} from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
 export * from "./auth-schema";
 
 export type ProjectRole = "admin" | "user";
 
-export const projects = pgTable("projects", {
+export const projects = sqliteTable("projects", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   name: text("name").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
 });
 
-export const apiKeys = pgTable("api_keys", {
+export const apiKeys = sqliteTable("api_keys", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
@@ -33,22 +30,22 @@ export const apiKeys = pgTable("api_keys", {
   keyHash: text("key_hash").notNull(),
   encryptedKey: text("encrypted_key").notNull(),
   name: text("name").notNull().default("Default Key"),
-  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
 });
 
-export const sessions = pgTable("sessions", {
+export const sessions = sqliteTable("sessions", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => crypto.randomUUID()),
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  metadata: jsonb("metadata"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
+  metadata: text("metadata", { mode: "json" }),
 });
 
-export const traces = pgTable(
+export const traces = sqliteTable(
   "traces",
   {
     traceId: text("trace_id")
@@ -60,22 +57,22 @@ export const traces = pgTable(
     sessionId: text("session_id").references(() => sessions.id, {
       onDelete: "set null",
     }),
-    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
+    timestamp: integer("timestamp", { mode: "timestamp_ms" }).defaultNow().notNull(),
     latencyMs: integer("latency_ms").notNull(),
     provider: text("provider").notNull(),
     modelRequested: text("model_requested").notNull(),
     modelUsed: text("model_used"),
     providerRequestId: text("provider_request_id"),
-    requestBody: jsonb("request_body").notNull(),
-    responseBody: jsonb("response_body"),
+    requestBody: text("request_body", { mode: "json" }).notNull(),
+    responseBody: text("response_body", { mode: "json" }),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
     outputText: text("output_text"),
     finishReason: text("finish_reason"),
     status: text("status").notNull(),
-    error: jsonb("error"),
-    costCents: doublePrecision("cost_cents"),
-    metadata: jsonb("metadata"),
+    error: text("error", { mode: "json" }),
+    costCents: real("cost_cents"),
+    metadata: text("metadata", { mode: "json" }),
   },
   (table) => [
     index("traces_project_timestamp_idx").on(table.projectId, table.timestamp),
@@ -92,7 +89,7 @@ export type NewApiKey = typeof apiKeys.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 
-export const userProjects = pgTable(
+export const userProjects = sqliteTable(
   "user_projects",
   {
     id: text("id")
@@ -105,7 +102,7 @@ export const userProjects = pgTable(
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
     role: text("role").notNull().default("user"),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).defaultNow().notNull(),
   },
   (table) => [
     index("user_projects_user_idx").on(table.userId),
@@ -123,7 +120,7 @@ export type NewUserProject = typeof userProjects.$inferInsert;
 export type Trace = typeof traces.$inferSelect;
 export type NewTrace = typeof traces.$inferInsert;
 
-export const spans = pgTable(
+export const spans = sqliteTable(
   "spans",
   {
     spanId: text("span_id").primaryKey(),
@@ -132,7 +129,7 @@ export const spans = pgTable(
       .notNull(),
     sessionId: text("session_id").notNull(),
     parentSpanId: text("parent_span_id"),
-    timestamp: timestamp("timestamp", { withTimezone: true }).defaultNow().notNull(),
+    timestamp: integer("timestamp", { mode: "timestamp_ms" }).defaultNow().notNull(),
     durationMs: integer("duration_ms"),
     source: text("source").notNull(),
     kind: text("kind").notNull(),
@@ -140,14 +137,14 @@ export const spans = pgTable(
     status: text("status").notNull(),
     toolUseId: text("tool_use_id"),
     toolName: text("tool_name"),
-    toolInput: jsonb("tool_input"),
-    toolResponse: jsonb("tool_response"),
-    error: jsonb("error"),
-    isInterrupt: boolean("is_interrupt"),
+    toolInput: text("tool_input", { mode: "json" }),
+    toolResponse: text("tool_response", { mode: "json" }),
+    error: text("error", { mode: "json" }),
+    isInterrupt: integer("is_interrupt", { mode: "boolean" }),
     cwd: text("cwd"),
     model: text("model"),
     agentName: text("agent_name"),
-    metadata: jsonb("metadata"),
+    metadata: text("metadata", { mode: "json" }),
   },
   (table) => [
     index("spans_project_timestamp_idx").on(table.projectId, table.timestamp),
@@ -158,24 +155,3 @@ export const spans = pgTable(
 
 export type Span = typeof spans.$inferSelect;
 export type NewSpan = typeof spans.$inferInsert;
-
-export const subscriptions = pgTable("subscriptions", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => crypto.randomUUID()),
-  userId: text("user_id")
-    .references(() => user.id, { onDelete: "cascade" })
-    .notNull(),
-  stripeCustomerId: text("stripe_customer_id").unique(),
-  stripeSubscriptionId: text("stripe_subscription_id").unique(),
-  stripePriceId: text("stripe_price_id"),
-  status: text("status").notNull(),
-  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
-  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
-  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-export type Subscription = typeof subscriptions.$inferSelect;
-export type NewSubscription = typeof subscriptions.$inferInsert;

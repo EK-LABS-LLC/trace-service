@@ -23,7 +23,6 @@ import { handleGetAnalytics, handleGetSpanAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
-import { stripeRoutes } from "./routes/stripe";
 import {
   startWAL,
   stopWAL,
@@ -65,16 +64,6 @@ app.use(
   }),
 );
 
-app.use(
-  "/dashboard/api/stripe/*",
-  cors({
-    origin: env.FRONTEND_URL,
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "OPTIONS"],
-    credentials: true,
-  }),
-);
-
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
@@ -89,7 +78,6 @@ app.post("/api/auth/sign-up/email", (c) => {
 
 app.post("/dashboard/api/signup", handleSignupWithProject);
 app.route("/dashboard/api", dashboard);
-app.route("/dashboard/api/stripe", stripeRoutes);
 
 app.post("/v1/auth/login", isAuthenticated);
 

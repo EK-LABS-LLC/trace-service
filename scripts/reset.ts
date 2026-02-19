@@ -5,7 +5,6 @@ import {
   traces,
   sessions,
   projects,
-  subscriptions,
 } from "../db/schema";
 
 /**
@@ -30,9 +29,6 @@ async function reset() {
 
   await db.delete(projects);
   console.log("  ✓ Cleared projects");
-
-  await db.delete(subscriptions);
-  console.log("  ✓ Cleared subscriptions");
 
   console.log("✅ Database reset complete!");
 }

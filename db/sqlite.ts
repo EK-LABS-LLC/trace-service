@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, count, desc, asc } from "drizzle-orm";
 import type { Database } from "./index";
 import { traces, sessions, spans } from "./schema";
 import type {
@@ -18,10 +18,10 @@ import type {
 } from "./adapter";
 
 /**
- * PostgreSQL implementation of the StorageAdapter interface.
+ * SQLite implementation of the StorageAdapter interface.
  * This is the default storage backend for Pulse.
  */
-export class PostgresStorage implements StorageAdapter {
+export class SqliteStorage implements StorageAdapter {
   constructor(private db: Database) {}
 
   async insertTrace(projectId: string, trace: NewTrace): Promise<Trace> {
@@ -98,7 +98,7 @@ export class PostgresStorage implements StorageAdapter {
       .select()
       .from(traces)
       .where(whereClause)
-      .orderBy(sql`${traces.timestamp} DESC`)
+      .orderBy(desc(traces.timestamp))
       .limit(limit)
       .offset(offset);
 
@@ -166,7 +166,7 @@ export class PostgresStorage implements StorageAdapter {
       .where(
         and(eq(traces.sessionId, sessionId), eq(traces.projectId, projectId)),
       )
-      .orderBy(sql`${traces.timestamp} ASC`);
+      .orderBy(asc(traces.timestamp));
   }
 
   async getSessionSpans(
@@ -177,7 +177,7 @@ export class PostgresStorage implements StorageAdapter {
       .select()
       .from(spans)
       .where(and(eq(spans.sessionId, sessionId), eq(spans.projectId, projectId)))
-      .orderBy(sql`${spans.timestamp} ASC`);
+      .orderBy(asc(spans.timestamp));
   }
 
   async insertSpan(projectId: string, span: NewSpan): Promise<Span> {
@@ -256,7 +256,7 @@ export class PostgresStorage implements StorageAdapter {
       .select()
       .from(spans)
       .where(whereClause)
-      .orderBy(sql`${spans.timestamp} DESC`)
+      .orderBy(desc(spans.timestamp))
       .limit(limit)
       .offset(offset);
 

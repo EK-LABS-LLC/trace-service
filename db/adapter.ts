@@ -56,7 +56,7 @@ export interface SpanQueryResult {
  * Storage adapter interface for Pulse trace storage.
  *
  * Implement this interface to add support for different storage backends.
- * The default implementation is PostgresStorage (see postgres.ts).
+ * The default implementation is SqliteStorage (see sqlite.ts).
  *
  * @example
  * ```ts

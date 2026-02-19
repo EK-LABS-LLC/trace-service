@@ -197,7 +197,7 @@ export async function getCostOverTime(
   let periodExpr: ReturnType<typeof sql>;
   switch (groupBy) {
     case "hour":
-      periodExpr = sql`to_char(date_trunc('hour', ${traces.timestamp}), 'YYYY-MM-DD HH24:00:00')`;
+      periodExpr = sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`;
       break;
     case "model":
       periodExpr = sql`${traces.modelRequested}`;
@@ -207,7 +207,7 @@ export async function getCostOverTime(
       break;
     case "day":
     default:
-      periodExpr = sql`to_char(date_trunc('day', ${traces.timestamp}), 'YYYY-MM-DD')`;
+      periodExpr = sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
       break;
   }
 
@@ -330,7 +330,7 @@ export async function getStatsByModel(
       costCents: sum(traces.costCents),
       avgLatency: avg(traces.latencyMs),
       totalTokens: sql<number>`SUM(COALESCE(${traces.inputTokens}, 0) + COALESCE(${traces.outputTokens}, 0))`,
-      errorCount: sql<number>`COUNT(*) FILTER (WHERE ${traces.status} = 'error')`,
+      errorCount: sql<number>`SUM(CASE WHEN ${traces.status} = 'error' THEN 1 ELSE 0 END)`,
     })
     .from(traces)
     .where(conditions)
@@ -362,8 +362,8 @@ export async function getCostOverTimeByProvider(
   const conditions = buildDateConditions(projectId, dateRange);
   const periodExpr =
     groupBy === "hour"
-      ? sql`to_char(date_trunc('hour', ${traces.timestamp}), 'YYYY-MM-DD HH24:00:00')`
-      : sql`to_char(date_trunc('day', ${traces.timestamp}), 'YYYY-MM-DD')`;
+      ? sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`
+      : sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
 
   const result = await db
     .select({
@@ -504,8 +504,8 @@ export async function getSpanCountsOverTime(
   const conditions = buildSpanDateConditions(projectId, dateRange);
   const periodExpr =
     groupBy === "hour"
-      ? sql`to_char(date_trunc('hour', ${spans.timestamp}), 'YYYY-MM-DD HH24:00:00')`
-      : sql`to_char(date_trunc('day', ${spans.timestamp}), 'YYYY-MM-DD')`;
+      ? sql`strftime('%Y-%m-%d %H:00:00', ${spans.timestamp} / 1000, 'unixepoch')`
+      : sql`strftime('%Y-%m-%d', ${spans.timestamp} / 1000, 'unixepoch')`;
 
   const result = await db
     .select({

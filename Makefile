@@ -1,19 +1,19 @@
 .PHONY: install dev up down down-v logs db-up db-down migrate migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-watch clean
 
 db-up:
-	docker compose up -d postgres
+	@echo "SQLite backend enabled; no external DB to start."
 
 db-down:
-	docker compose stop postgres
+	@echo "SQLite backend enabled; no external DB to stop."
 
 install:
 	bun install
 
-# Local development (Postgres + app)
-dev: db-up migrate
+# Local development (SQLite + app)
+dev: migrate
 	bun run index.ts
 
-# Full stack in Docker (postgres + trace-service)
+# Full stack in Docker (trace-service only)
 up:
 	docker compose up --build
 
@@ -25,15 +25,15 @@ down-v:
 	docker compose down -v
 
 logs:
-	docker compose logs -f postgres trace-service
+	docker compose logs -f trace-service
 
-migrate: db-up
+migrate:
 	bun run db:migrate
 
 migrate-gen:
 	bun run db:generate
 
-migrate-push: db-up
+migrate-push:
 	bun run db:push
 
 studio:
@@ -85,10 +85,9 @@ test:
 	bun test --env-file=.env.test
 
 # Integration tests against local service on :3000.
-# This target starts postgres + app, waits for health, runs tests, and cleans up.
+# This target starts the app, waits for health, runs tests, and cleans up.
 test-e2e:
 	@set -e; \
-	docker compose up -d postgres; \
 	bun run db:migrate; \
 	bun run index.ts > /tmp/trace-service-test.log 2>&1 & \
 	PID=$$!; \
