@@ -136,6 +136,49 @@ Artifacts:
 - `dist/pulse` (single mode)
 - `dist/pulse-scale` (scale mode)
 
+### 7. Publish Release Artifacts
+
+Tag and push a version:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+This triggers `.github/workflows/release.yml`, which builds and publishes:
+
+- `pulse-linux-amd64`
+- `pulse-linux-arm64`
+- `pulse-darwin-amd64`
+- `pulse-darwin-arm64`
+- `pulse-scale-linux-amd64`
+- `pulse-scale-linux-arm64`
+- `pulse-scale-darwin-amd64`
+- `pulse-scale-darwin-arm64`
+- `checksums.txt`
+
+You can also run the release workflow manually from GitHub Actions.
+
+### 8. Install Binary
+
+Install latest `pulse`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse
+```
+
+Install latest `pulse-scale`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-scale
+```
+
+Install a specific tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/v0.1.0/scripts/install.sh | bash -s -- pulse --version v0.1.0
+```
+
 ## Local Postgres Helper (Scale Mode)
 
 For scale-mode tests/dev, start only Postgres:
