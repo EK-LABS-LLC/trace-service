@@ -33,6 +33,8 @@ Auth: Better Auth session cookie (`better-auth.session_token`)
 
 ## Self-hosting
 
+Operational runbooks live in `docs/operations.md`.
+
 ### 1. Prerequisites
 
 - Bun 1.3+
@@ -132,6 +134,14 @@ docker compose up --build
 
 This starts trace-service (with local SQLite at `.data/pulse.db`) on `http://localhost:3000`. Run the dashboard separately from `../pulse-dashboard`.
 
+Scale mode local Postgres helper:
+
+```bash
+make scale-up
+make test-e2e-scale
+make scale-down
+```
+
 ## SDK usage
 
 Create an API key in the dashboard (**API Keys** page), then initialize the SDK in your app.
@@ -207,4 +217,11 @@ Tests are integration-oriented and assume service is reachable at `http://localh
 
 ```bash
 bun test --env-file=.env.test
+```
+
+End-to-end harness (starts service automatically):
+
+```bash
+make test-e2e
+make test-e2e-scale
 ```

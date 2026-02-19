@@ -4,7 +4,9 @@ import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 function readSpanWalFiles(): string[] {
-  const segmentsDir = join(process.cwd(), ".data", "wal-spans", "segments");
+  const walSpanDir =
+    process.env.WAL_SPAN_DIR ?? join(process.cwd(), ".data", "wal-spans");
+  const segmentsDir = join(walSpanDir, "segments");
   if (!existsSync(segmentsDir)) return [];
 
   const files = readdirSync(segmentsDir)

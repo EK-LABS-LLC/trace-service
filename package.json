@@ -17,6 +17,7 @@
     "db:snapshot": "bunx drizzle-kit generate",
     "build:pulse": "bun build ./pulse.ts --compile --outfile ./dist/pulse",
     "build:pulse-scale": "bun build ./pulse-scale.ts --compile --outfile ./dist/pulse-scale",
+    "release:artifacts": "bun run scripts/release.ts",
     "test": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",
     "format": "bunx prettier --write \"**/*.{ts,tsx,js,json}\""

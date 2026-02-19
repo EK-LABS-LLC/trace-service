@@ -42,7 +42,7 @@ interface TracesResponse {
  * WAL File Helpers - only for reading and verifying storage
  */
 function getWalDir(): string {
-  return join(process.cwd(), ".data", "wal");
+  return process.env.WAL_DIR ?? join(process.cwd(), ".data", "wal");
 }
 
 function getSegmentsDir(): string {
