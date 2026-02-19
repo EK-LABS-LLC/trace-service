@@ -37,7 +37,12 @@ Auth: Better Auth session cookie (`better-auth.session_token`)
 
 - Bun 1.3+
 
-### 2. Environment
+### 2. Choose a Mode
+
+- `single` (default): SQLite + local WAL, optimized for single-node installs.
+- `scale`: Postgres + partitioned WAL listeners, optimized for higher ingest rates.
+
+### 3. Environment
 
 Required:
 
@@ -47,9 +52,13 @@ Required:
 
 Optional:
 
+- `PULSE_MODE` (`single` | `scale`, default `single`)
 - `DATABASE_PATH` (default `.data/pulse.db`)
+- `DATABASE_URL` (required for `scale`, e.g. `postgresql://pulse:pulse@localhost:5432/pulse`)
 - `NODE_ENV` (`development` | `test` | `production`)
 - `ADMIN_KEY` (legacy/internal use)
+- `TRACE_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
+- `SPAN_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
 
 Example (local):
 
@@ -60,17 +69,39 @@ export BETTER_AUTH_SECRET='replace-with-32+char-secret'
 export BETTER_AUTH_URL='http://localhost:3000'
 ```
 
-### 3. Install + migrate
+Scale mode example:
+
+```bash
+export PULSE_MODE=scale
+export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
+export PORT=3000
+export BETTER_AUTH_SECRET='replace-with-32+char-secret'
+export BETTER_AUTH_URL='http://localhost:3000'
+```
+
+### 4. Install + migrate
 
 ```bash
 bun install
 bun run db:migrate
 ```
 
-### 4. Start service
+For `scale` mode:
 
 ```bash
-bun run dev
+bun run db:migrate:scale
+```
+
+### 5. Start service
+
+```bash
+bun run dev:single
+```
+
+Scale mode:
+
+```bash
+bun run dev:scale
 ```
 
 Service health:
@@ -78,6 +109,18 @@ Service health:
 ```bash
 curl http://localhost:3000/health
 ```
+
+### 6. Build Executables
+
+```bash
+bun run build:pulse
+bun run build:pulse-scale
+```
+
+Artifacts:
+
+- `dist/pulse` (single mode)
+- `dist/pulse-scale` (scale mode)
 
 ## Docker (quick start)
 
