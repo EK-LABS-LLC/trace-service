@@ -10,6 +10,12 @@ on:
 jobs:
   single-mode:
     runs-on: ubuntu-latest
+    env:
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      BETTER_AUTH_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +33,12 @@ jobs:
 
   scale-mode:
     runs-on: ubuntu-latest
+    env:
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      BETTER_AUTH_URL: http://localhost:3000
+      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
     services:
       postgres:
         image: postgres:16-alpine
