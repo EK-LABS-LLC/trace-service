@@ -11,6 +11,7 @@
 
 ```bash
 export PULSE_MODE=single
+export PULSE_RUNTIME_MODE=all
 export PORT=3000
 export BETTER_AUTH_SECRET='replace-with-32+char-secret'
 export BETTER_AUTH_URL='http://localhost:3000'
@@ -40,6 +41,7 @@ Binary output: `dist/pulse`.
 
 ```bash
 export PULSE_MODE=scale
+export PULSE_RUNTIME_MODE=all
 export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
 export TRACE_WAL_PARTITIONS=4
 export SPAN_WAL_PARTITIONS=4
@@ -57,6 +59,20 @@ bun run pulse-scale.ts
 ```
 
 Stop with `Ctrl+C`.
+
+### Split API and listeners (scale mode)
+
+API-only process:
+
+```bash
+PULSE_MODE=scale PULSE_RUNTIME_MODE=api bun run pulse-scale.ts
+```
+
+Listener-only process:
+
+```bash
+PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse-scale.ts
+```
 
 ### Build Binary
 

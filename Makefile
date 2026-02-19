@@ -1,13 +1,8 @@
-.PHONY: install dev dev-scale up down down-v logs db-up db-down scale-up scale-down migrate migrate-scale migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-e2e-scale test-watch build build-scale release-artifacts clean
+.PHONY: install dev dev-api dev-listener dev-scale dev-scale-api dev-scale-listener up down scale-up scale-down migrate migrate-scale migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-e2e-split test-e2e-scale test-e2e-scale-split test-watch build build-scale release-artifacts clean
 
 SCALE_DATABASE_PORT ?= 55433
 SCALE_DATABASE_URL ?= postgresql://pulse:pulse@localhost:$(SCALE_DATABASE_PORT)/pulse
-
-db-up:
-	@echo "SQLite backend enabled; no external DB to start."
-
-db-down:
-	@echo "SQLite backend enabled; no external DB to stop."
+E2E_SCRIPT := ./scripts/run-e2e.sh
 
 scale-up:
 	PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml up -d postgres
@@ -22,23 +17,32 @@ install:
 dev: migrate
 	bun run pulse.ts
 
+# Local development (SQLite + API only)
+dev-api: migrate
+	PULSE_RUNTIME_MODE=api bun run pulse.ts
+
+# Local development (SQLite + listeners only)
+dev-listener:
+	PULSE_RUNTIME_MODE=listener bun run pulse.ts
+
 # Scale mode (Postgres + partitioned listeners)
 dev-scale:
 	PULSE_MODE=scale bun run pulse-scale.ts
 
-# Full stack in Docker (trace-service only)
+# Scale mode API only (no listeners)
+dev-scale-api:
+	PULSE_MODE=scale PULSE_RUNTIME_MODE=api bun run pulse-scale.ts
+
+# Scale mode listeners only (no API)
+dev-scale-listener:
+	PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse-scale.ts
+
+# Backward-compatible aliases for local scale Postgres helper
 up:
-	docker compose up --build
+	$(MAKE) scale-up
 
 down:
-	docker compose down
-
-# stop and remove volumes ( reset database )
-down-v:
-	docker compose down -v
-
-logs:
-	docker compose logs -f trace-service
+	$(MAKE) scale-down
 
 migrate:
 	bun run db:migrate
@@ -100,27 +104,11 @@ seed-with-api-key:
 test:
 	bun test --env-file=.env.test
 
-# Integration tests against local service on :3000.
-# This target starts the app, waits for health, runs tests, and cleans up.
 test-e2e:
-	@set -e; \
-	TEST_DATA_DIR=$$(mktemp -d /tmp/pulse-test-single.XXXXXX); \
-	DATABASE_PATH=$$TEST_DATA_DIR/pulse.test.db WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test bun run db:migrate; \
-	DATABASE_PATH=$$TEST_DATA_DIR/pulse.test.db WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse.ts > /tmp/trace-service-test.log 2>&1 & \
-	PID=$$!; \
-	trap 'kill $$PID 2>/dev/null || true; wait $$PID 2>/dev/null || true; rm -rf $$TEST_DATA_DIR' EXIT; \
-	for i in $$(seq 1 40); do \
-		if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then \
-			break; \
-		fi; \
-		sleep 0.5; \
-		if [ $$i -eq 40 ]; then \
-			echo "Service failed to become healthy. Last logs:"; \
-			tail -n 120 /tmp/trace-service-test.log || true; \
-			exit 1; \
-		fi; \
-	done; \
-	DATABASE_PATH=$$TEST_DATA_DIR/pulse.test.db WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test bun test --env-file=.env.test
+	$(E2E_SCRIPT) single
+
+test-e2e-split:
+	SPLIT=1 $(E2E_SCRIPT) single
 
 test-watch:
 	bun test --watch --env-file=.env.test
@@ -135,36 +123,10 @@ release-artifacts:
 	bun run release:artifacts
 
 test-e2e-scale:
-	@set -e; \
-	TEST_DATA_DIR=$$(mktemp -d /tmp/pulse-test-scale.XXXXXX); \
-	PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml up -d postgres; \
-	PID=""; \
-	trap 'if [ -n "$$PID" ]; then kill $$PID 2>/dev/null || true; wait $$PID 2>/dev/null || true; fi; PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml down -v >/dev/null 2>&1 || true; rm -rf $$TEST_DATA_DIR' EXIT; \
-	for i in $$(seq 1 60); do \
-		if PULSE_SCALE_PG_PORT=$(SCALE_DATABASE_PORT) docker compose -f docker-compose.scale.yml exec -T postgres pg_isready -U pulse -d pulse >/dev/null 2>&1; then \
-			break; \
-		fi; \
-		sleep 1; \
-		if [ $$i -eq 60 ]; then \
-			echo "Postgres failed to become ready"; \
-			exit 1; \
-		fi; \
-	done; \
-	PULSE_MODE=scale DATABASE_URL='$(SCALE_DATABASE_URL)' bun run db:migrate:scale; \
-	PULSE_MODE=scale DATABASE_URL='$(SCALE_DATABASE_URL)' WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse-scale.ts > /tmp/trace-service-scale-test.log 2>&1 & \
-	PID=$$!; \
-	for i in $$(seq 1 40); do \
-		if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then \
-			break; \
-		fi; \
-		sleep 0.5; \
-		if [ $$i -eq 40 ]; then \
-			echo "Scale service failed to become healthy. Last logs:"; \
-			tail -n 120 /tmp/trace-service-scale-test.log || true; \
-			exit 1; \
-		fi; \
-	done; \
-	WAL_DIR=$$TEST_DATA_DIR/wal.test WAL_SPAN_DIR=$$TEST_DATA_DIR/wal-spans.test bun test --env-file=.env.test
+	$(E2E_SCRIPT) scale
+
+test-e2e-scale-split:
+	SPLIT=1 $(E2E_SCRIPT) scale
 
 clean:
 	rm -rf node_modules

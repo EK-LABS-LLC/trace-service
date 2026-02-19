@@ -58,6 +58,20 @@ function spanOptions(options?: Partial<WALStartOptions>): WALStartOptions {
   };
 }
 
+export function resolveTraceWALDirs(
+  options?: Partial<WALStartOptions>,
+): string[] {
+  const config = traceOptions(options);
+  return resolvePartitionDirs(config.walDir, config.partitions);
+}
+
+export function resolveSpanWALDirs(
+  options?: Partial<WALStartOptions>,
+): string[] {
+  const config = spanOptions(options);
+  return resolvePartitionDirs(config.walDir, config.partitions);
+}
+
 export function getEventBus(): {
   publish: (subject: string, payload: TraceIngestEventPayload) => Promise<void>;
 } {
@@ -79,7 +93,7 @@ export function getEventBus(): {
 
 export async function startWAL(options?: Partial<WALStartOptions>): Promise<void> {
   const config = traceOptions(options);
-  traceWalDirs = resolvePartitionDirs(config.walDir, config.partitions);
+  traceWalDirs = resolveTraceWALDirs(options);
   traceWalWriters = [];
   traceWalIndexes = [];
   traceWalCheckpoints = [];
@@ -142,7 +156,7 @@ export async function startSpanWAL(
   options?: Partial<WALStartOptions>,
 ): Promise<void> {
   const config = spanOptions(options);
-  spanWalDirs = resolvePartitionDirs(config.walDir, config.partitions);
+  spanWalDirs = resolveSpanWALDirs(options);
   spanWalWriters = [];
   spanWalIndexes = [];
   spanWalCheckpoints = [];

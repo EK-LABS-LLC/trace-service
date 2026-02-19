@@ -4,6 +4,7 @@ import { resolveDataPaths, resolveOptionalPath } from "./lib/data-paths";
 
 const envSchema = z.object({
   PULSE_MODE: z.enum(["single", "scale"]).default("single"),
+  PULSE_RUNTIME_MODE: z.enum(["all", "api", "listener"]).default("all"),
   PULSE_HOME: z.string().optional(),
   PULSE_DATA_DIR: z.string().optional(),
   DATABASE_PATH: z.string().optional(),

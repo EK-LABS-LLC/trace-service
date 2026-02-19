@@ -55,6 +55,7 @@ Required:
 Optional:
 
 - `PULSE_MODE` (`single` | `scale`, default `single`)
+- `PULSE_RUNTIME_MODE` (`all` | `api` | `listener`, default `all`)
 - `PULSE_HOME` (default `~/.pulse`)
 - `PULSE_DATA_DIR` (default `~/.pulse/.data`)
 - `DATABASE_PATH` (default `~/.pulse/.data/pulse.db`)
@@ -107,6 +108,16 @@ Scale mode:
 bun run dev:scale
 ```
 
+Split API and listeners into separate processes:
+
+```bash
+# API process only
+PULSE_RUNTIME_MODE=api bun run dev:scale
+
+# Listener process only
+PULSE_RUNTIME_MODE=listener bun run dev:scale
+```
+
 Service health:
 
 ```bash
@@ -125,17 +136,17 @@ Artifacts:
 - `dist/pulse` (single mode)
 - `dist/pulse-scale` (scale mode)
 
-## Docker (quick start)
+## Local Postgres Helper (Scale Mode)
 
-From `trace-service/`:
+For scale-mode tests/dev, start only Postgres:
 
 ```bash
-docker compose up --build
+make up
+make test-e2e-scale
+make down
 ```
 
-This starts trace-service on `http://localhost:3000`. By default it stores SQLite/WAL data under `~/.pulse/.data` unless overridden.
-
-Scale mode local Postgres helper:
+Equivalent explicit commands:
 
 ```bash
 make scale-up
