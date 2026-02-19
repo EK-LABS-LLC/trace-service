@@ -25,6 +25,26 @@ const MODELS: Record<(typeof PROVIDERS)[number], string[]> = {
   openrouter: ["meta-llama/llama-3-70b-instruct", "mistralai/mixtral-8x7b"],
 };
 
+type ModelCostRate = {
+  inputPer1kCents: number;
+  outputPer1kCents: number;
+};
+
+const MODEL_COST_RATES: Record<string, ModelCostRate> = {
+  "gpt-4o": { inputPer1kCents: 0.5, outputPer1kCents: 1.5 },
+  "gpt-4o-mini": { inputPer1kCents: 0.015, outputPer1kCents: 0.06 },
+  "gpt-4-turbo": { inputPer1kCents: 1.0, outputPer1kCents: 3.0 },
+  "claude-3-opus-20240229": { inputPer1kCents: 1.5, outputPer1kCents: 7.5 },
+  "claude-3-sonnet-20240229": { inputPer1kCents: 0.3, outputPer1kCents: 1.5 },
+  "meta-llama/llama-3-70b-instruct": { inputPer1kCents: 0.08, outputPer1kCents: 0.08 },
+  "mistralai/mixtral-8x7b": { inputPer1kCents: 0.06, outputPer1kCents: 0.06 },
+};
+
+const DEFAULT_MODEL_COST_RATE: ModelCostRate = {
+  inputPer1kCents: 0.1,
+  outputPer1kCents: 0.2,
+};
+
 function getArg(name: string): string | undefined {
   const key = `--${name}=`;
   const found = Bun.argv.find((a) => a.startsWith(key));
@@ -79,6 +99,21 @@ function randomItem<T>(items: readonly T[]): T {
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function estimateCostCents(
+  model: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const rate = MODEL_COST_RATES[model] ?? DEFAULT_MODEL_COST_RATE;
+  const baseCents =
+    (inputTokens / 1000) * rate.inputPer1kCents +
+    (outputTokens / 1000) * rate.outputPer1kCents;
+
+  // Add a small variance so seeded data does not look unnaturally uniform.
+  const varianceMultiplier = randomInt(92, 108) / 100;
+  return Number((baseCents * varianceMultiplier).toFixed(4));
 }
 
 function extractSessionCookie(setCookieHeader: string | null): string | null {
@@ -264,6 +299,7 @@ async function seedData(args: Args, apiKey: string): Promise<{ traces: number; s
       const isError = Math.random() < 0.06;
       const inputTokens = randomInt(80, 2200);
       const outputTokens = isError ? 0 : randomInt(50, 1800);
+      const costCents = estimateCostCents(model, inputTokens, outputTokens);
 
       tracesBuffer.push({
         trace_id: crypto.randomUUID(),
@@ -281,6 +317,7 @@ async function seedData(args: Args, apiKey: string): Promise<{ traces: number; s
         response_body: isError ? undefined : { id: crypto.randomUUID(), choices: [] },
         input_tokens: inputTokens,
         output_tokens: outputTokens,
+        cost_cents: costCents,
         output_text: isError ? undefined : "Seeded model response",
         finish_reason: isError ? undefined : "stop",
         error: isError ? { message: "Seeded synthetic error" } : undefined,
