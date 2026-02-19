@@ -33,7 +33,10 @@ export interface CreateProjectUserInput {
   role?: ProjectRole;
 }
 
-export async function getProjectUsers(projectId: string, db: Database): Promise<ProjectUserInfo[]> {
+export async function getProjectUsers(
+  projectId: string,
+  db: Database,
+): Promise<ProjectUserInfo[]> {
   const rows = await db
     .select({
       userId: user.id,
@@ -58,7 +61,7 @@ export async function getProjectUsers(projectId: string, db: Database): Promise<
 export async function createProjectUser(
   projectId: string,
   input: CreateProjectUserInput,
-  db: Database
+  db: Database,
 ): Promise<ProjectUserInfo> {
   const name = input.name?.trim();
   const email = input.email?.trim().toLowerCase();
@@ -83,11 +86,19 @@ export async function createProjectUser(
     const [existingMembership] = await db
       .select({ id: userProjects.id })
       .from(userProjects)
-      .where(and(eq(userProjects.userId, existingUser.id), eq(userProjects.projectId, projectId)))
+      .where(
+        and(
+          eq(userProjects.userId, existingUser.id),
+          eq(userProjects.projectId, projectId),
+        ),
+      )
       .limit(1);
 
     if (existingMembership) {
-      throw new ProjectUsersServiceError("User is already a member of this project", 409);
+      throw new ProjectUsersServiceError(
+        "User is already a member of this project",
+        409,
+      );
     }
 
     const [membership] = await db
@@ -111,7 +122,10 @@ export async function createProjectUser(
   }
 
   if (!name || !password) {
-    throw new ProjectUsersServiceError("Missing required fields for new user: name, password", 400);
+    throw new ProjectUsersServiceError(
+      "Missing required fields for new user: name, password",
+      400,
+    );
   }
 
   let createdUserId: string | null = null;
@@ -150,7 +164,8 @@ export async function createProjectUser(
       await db.delete(user).where(eq(user.id, createdUserId));
     }
 
-    const message = error instanceof Error ? error.message : "Failed to create project user";
+    const message =
+      error instanceof Error ? error.message : "Failed to create project user";
     throw new ProjectUsersServiceError(message, 400);
   }
 }

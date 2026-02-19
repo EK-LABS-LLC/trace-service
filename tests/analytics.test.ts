@@ -1,5 +1,11 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { authFetch, createTestProject, createTestTraces, cleanupTestData } from "./setup";
+import {
+  authFetch,
+  createTestProject,
+  createTestTraces,
+  createTestSpans,
+  cleanupTestData,
+} from "./setup";
 import type { CostDataPoint } from "../db/analytics";
 
 describe("Analytics Endpoint", () => {
@@ -11,6 +17,8 @@ describe("Analytics Endpoint", () => {
     console.log(`[analytics.test] Created project: ${testProject.id}`);
     await createTestTraces(testProject.id, 20);
     console.log("[analytics.test] Created 20 test traces");
+    await createTestSpans(testProject.id, 30);
+    console.log("[analytics.test] Created 30 test spans");
   });
 
   afterAll(async () => {
@@ -25,7 +33,7 @@ describe("Analytics Endpoint", () => {
     test("returns analytics data for project", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const data = await response.json();
 
@@ -43,7 +51,7 @@ describe("Analytics Endpoint", () => {
     test("totalRequests matches trace count", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const data = (await response.json()) as { totalRequests: number };
 
@@ -53,7 +61,7 @@ describe("Analytics Endpoint", () => {
     test("returns computed metrics", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const data = (await response.json()) as {
         computed: {
@@ -77,24 +85,30 @@ describe("Analytics Endpoint", () => {
     test("returns token breakdown", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const data = (await response.json()) as {
         totalTokens: { input: number; output: number; total: number };
       };
 
       expect(
-        (data as { totalTokens: { input: number; output: number; total: number } }).totalTokens
+        (
+          data as {
+            totalTokens: { input: number; output: number; total: number };
+          }
+        ).totalTokens,
       ).toHaveProperty("input");
       expect(data.totalTokens).toHaveProperty("output");
       expect(data.totalTokens).toHaveProperty("total");
-      expect(data.totalTokens.total).toBe(data.totalTokens.input + data.totalTokens.output);
+      expect(data.totalTokens.total).toBe(
+        data.totalTokens.input + data.totalTokens.output,
+      );
     });
 
     test("calculates error rate correctly", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const data = (await response.json()) as { errorRate: number };
 
@@ -103,13 +117,19 @@ describe("Analytics Endpoint", () => {
     });
 
     test("requires date_from parameter", async () => {
-      const response = await authFetch(`/v1/analytics?date_to=${dateTo}`, testProject.apiKey);
+      const response = await authFetch(
+        `/v1/analytics?date_to=${dateTo}`,
+        testProject.apiKey,
+      );
 
       expect(response.status).toBe(400);
     });
 
     test("requires date_to parameter", async () => {
-      const response = await authFetch(`/v1/analytics?date_from=${dateFrom}`, testProject.apiKey);
+      const response = await authFetch(
+        `/v1/analytics?date_from=${dateFrom}`,
+        testProject.apiKey,
+      );
 
       expect(response.status).toBe(400);
     });
@@ -117,7 +137,7 @@ describe("Analytics Endpoint", () => {
     test("requires ISO datetime format", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=2024-01-01&date_to=2024-12-31`,
-        testProject.apiKey
+        testProject.apiKey,
       );
 
       expect(response.status).toBe(400);
@@ -126,12 +146,49 @@ describe("Analytics Endpoint", () => {
     test("supports group_by parameter", async () => {
       const response = await authFetch(
         `/v1/analytics?date_from=${dateFrom}&date_to=${dateTo}&group_by=day`,
-        testProject.apiKey
+        testProject.apiKey,
       );
       const data = (await response.json()) as { costOverTime: CostDataPoint[] };
 
       expect(response.status).toBe(200);
       expect(data.costOverTime).toBeInstanceOf(Array);
+    });
+  });
+
+  describe("GET /v1/analytics/spans", () => {
+    const dateFrom = "2020-01-01T00:00:00Z";
+    const dateTo = "2030-12-31T23:59:59Z";
+
+    test("returns span analytics data with dashboard metrics", async () => {
+      const response = await authFetch(
+        `/v1/analytics/spans?date_from=${dateFrom}&date_to=${dateTo}`,
+        testProject.apiKey,
+      );
+      const data = (await response.json()) as {
+        agentRuns: number;
+        toolCalls: number;
+        avgSessionDurationMs: number;
+        successRate: number;
+        topTools: Array<{ name: string; count: number }>;
+        totalSpans: number;
+      };
+
+      expect(response.status).toBe(200);
+      expect(data).toHaveProperty("agentRuns");
+      expect(data).toHaveProperty("toolCalls");
+      expect(data).toHaveProperty("avgSessionDurationMs");
+      expect(data).toHaveProperty("successRate");
+      expect(data).toHaveProperty("topTools");
+      expect(data).toHaveProperty("totalSpans");
+      expect(data.totalSpans).toBeGreaterThanOrEqual(30);
+      expect(data.successRate).toBeGreaterThanOrEqual(0);
+      expect(data.successRate).toBeLessThanOrEqual(100);
+      expect(Array.isArray(data.topTools)).toBe(true);
+    });
+
+    test("requires date range for span analytics", async () => {
+      const response = await authFetch("/v1/analytics/spans", testProject.apiKey);
+      expect(response.status).toBe(400);
     });
   });
 });

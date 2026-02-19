@@ -1,74 +1,125 @@
-import type { ConsumerMessages } from "@nats-io/jetstream";
 import { batchTraceSchema } from "../shared/validation";
-import { storage } from "../db/postgres";
-import { ingestTraceBatch } from "../services/traces";
-import { ConsumerNotFoundError } from "./errors";
-import { NatsJetStreamEventBus } from "./nats";
-import { type TraceIngestEventPayload } from "./subjects";
+import { storage } from "../db";
+import { ingestTraceBatchIdempotent } from "../services/traces";
+import type { TraceIngestEventPayload } from "./subjects";
+import { WALReader, WALIndex, type WALConfig } from "./wal";
+import { WALCheckpoint } from "./checkpoint";
+import { DeadLetterQueue } from "./dead-letter";
+import type { WALRecord } from "./wal-record";
 
 export class TraceStreamListener {
-  private readonly decoder = new TextDecoder();
-  private messages?: ConsumerMessages;
+  private reader?: WALReader;
   private stopped = false;
+  private isProcessing = false;
+  private readonly retryCount = new Map<number, number>();
+  private readonly dlq: DeadLetterQueue;
+  private processingTimer?: ReturnType<typeof setInterval>;
 
   constructor(
-    private readonly bus: NatsJetStreamEventBus,
-    private readonly stream: string,
-    private readonly durableName: string
-  ) {}
+    private readonly config: WALConfig,
+    private readonly checkpoint: WALCheckpoint,
+    private readonly maxRetries: number = 3,
+  ) {
+    this.dlq = new DeadLetterQueue(config.walDir + "/dead-letter");
+  }
 
   async start(): Promise<void> {
-    const js = this.bus.getJetStreamClient();
+    const index = new WALIndex(this.config.walDir);
 
-    let consumer;
-    try {
-      consumer = await js.consumers.get(this.stream, this.durableName);
-    } catch (err) {
-      throw new ConsumerNotFoundError(
-        `Consumer ${this.durableName} missing on stream ${this.stream}: ${err}`
-      );
-    }
+    this.reader = new WALReader(this.config, this.checkpoint, index);
+    this.stopped = false;
 
-    this.messages = await consumer.consume();
-    console.log(`Trace consumer ${this.durableName} started`);
+    console.log("WAL trace listener started");
 
-    void this.processLoop();
+    // Poll for new records
+    this.processingTimer = setInterval(() => {
+      void this.processBatch();
+    }, 100);
   }
 
   stop(): void {
     this.stopped = true;
-    this.messages?.stop();
+    if (this.processingTimer) {
+      clearInterval(this.processingTimer);
+      this.processingTimer = undefined;
+    }
   }
 
-  private async processLoop(): Promise<void> {
-    const messages = this.messages;
-    if (!messages) return;
+  private async processBatch(): Promise<void> {
+    if (this.stopped || !this.reader || this.isProcessing) {
+      return;
+    }
 
-    for await (const msg of messages) {
-      if (this.stopped) break;
-      try {
-        const event = this.decodePayload(msg.data);
-        await this.handleTrace(event);
-        msg.ack();
-      } catch (err) {
-        console.error("Trace handler error:", err);
-        msg.nak();
+    this.isProcessing = true;
+
+    try {
+      const records: WALRecord[] = [];
+      const maxBatchSize = 100;
+
+      for await (const record of this.reader.read()) {
+        records.push(record);
+        if (records.length >= maxBatchSize) {
+          break;
+        }
       }
+
+      if (records.length === 0) {
+        return;
+      }
+
+      console.log(`[WAL listener] Processing ${records.length} records`);
+
+      let maxProcessedSequence: number | null = null;
+
+      for (const record of records) {
+        if (this.stopped) break;
+
+        try {
+          await this.processRecord(record);
+          this.retryCount.delete(record.sequence);
+          maxProcessedSequence = record.sequence;
+        } catch (err) {
+          const retries = this.retryCount.get(record.sequence) ?? 0;
+
+          if (retries < this.maxRetries) {
+            this.retryCount.set(record.sequence, retries + 1);
+            console.error(
+              `Trace processing error (attempt ${retries + 1}/${this.maxRetries}):`,
+              err,
+            );
+            break;
+          } else {
+            console.error(
+              `Trace processing failed after ${this.maxRetries} retries, sending to DLQ:`,
+              err,
+            );
+            await this.dlq.write(record, String(err), this.maxRetries);
+            this.retryCount.delete(record.sequence);
+            maxProcessedSequence = record.sequence;
+          }
+        }
+      }
+
+      if (maxProcessedSequence !== null) {
+        await this.reader.markNextSequence(maxProcessedSequence + 1);
+      }
+    } catch (err) {
+      console.error("WAL listener error:", err);
+    } finally {
+      this.isProcessing = false;
     }
   }
 
-  private decodePayload(data: Uint8Array): TraceIngestEventPayload {
-    if (!data || data.length === 0) {
-      throw new Error("Empty trace payload");
-    }
-    return JSON.parse(this.decoder.decode(data)) as TraceIngestEventPayload;
-  }
+  private async processRecord(record: WALRecord): Promise<void> {
+    const payload = record.payload as TraceIngestEventPayload;
 
-  private async handleTrace(payload: TraceIngestEventPayload): Promise<void> {
     if (!payload.projectId) {
       throw new Error("Trace event missing projectId");
     }
+
     const traces = batchTraceSchema.parse(payload.traces);
-    await ingestTraceBatch(payload.projectId, traces, storage);
+
+    // Use idempotent insert for WAL processing (handles crash recovery duplicates)
+    await ingestTraceBatchIdempotent(payload.projectId, traces, storage);
   }
 }

@@ -8,7 +8,9 @@ export async function handleGetProjects(c: Context): Promise<Response> {
   return c.json({ projects });
 }
 
-export async function handleCreateProjectForCurrentUser(c: Context): Promise<Response> {
+export async function handleCreateProjectForCurrentUser(
+  c: Context,
+): Promise<Response> {
   const body = await c.req.json<{ name?: string }>();
 
   if (!body.name || typeof body.name !== "string") {

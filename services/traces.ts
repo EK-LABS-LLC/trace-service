@@ -55,16 +55,20 @@ function toNewTrace(input: TraceInput, projectId: string): NewTrace {
 export async function ingestTraces(
   projectId: string,
   rawTraces: unknown,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<IngestResult> {
   const parsed = batchTraceSchema.parse(rawTraces);
   return ingestTraceBatch(projectId, parsed, storage);
 }
 
+/**
+ * Ingest a batch of traces (synchronous, non-idempotent).
+ * Uses regular insertTrace - will fail on duplicates.
+ */
 export async function ingestTraceBatch(
   projectId: string,
   traces: TraceInput[],
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<IngestResult> {
   const sessionIds = new Set<string>();
   for (const trace of traces) {
@@ -91,13 +95,47 @@ export async function ingestTraceBatch(
 }
 
 /**
+ * Ingest a batch of traces idempotently.
+ * Uses insertTraceIdempotent - skips duplicates on insert.
+ * Used by WAL processing for crash recovery.
+ */
+export async function ingestTraceBatchIdempotent(
+  projectId: string,
+  traces: TraceInput[],
+  storage: StorageAdapter,
+): Promise<IngestResult> {
+  const sessionIds = new Set<string>();
+  for (const trace of traces) {
+    if (trace.session_id) {
+      sessionIds.add(trace.session_id);
+    }
+  }
+
+  for (const sessionId of sessionIds) {
+    await storage.upsertSession(projectId, { id: sessionId, projectId });
+  }
+
+  const insertedTraces: Trace[] = [];
+  for (const traceInput of traces) {
+    const newTrace = toNewTrace(traceInput, projectId);
+    const inserted = await storage.insertTraceIdempotent(projectId, newTrace);
+    insertedTraces.push(inserted);
+  }
+
+  return {
+    count: insertedTraces.length,
+    traces: insertedTraces,
+  };
+}
+
+/**
  * Get a single trace by ID.
  * Returns null if not found.
  */
 export async function getTrace(
   traceId: string,
   projectId: string,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<Trace | null> {
   return storage.getTrace(traceId, projectId);
 }
@@ -108,7 +146,7 @@ export async function getTrace(
 export async function queryTraces(
   projectId: string,
   filters: TraceQueryFilters,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<QueryResult> {
   const result = await storage.queryTraces(projectId, filters);
 

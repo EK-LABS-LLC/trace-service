@@ -50,7 +50,10 @@ export function generateApiKey(): string {
  * @param db - Drizzle database instance
  * @returns The created project info including the plaintext API key (only returned once)
  */
-export async function createProject(name: string, db: Database): Promise<CreateProjectResult> {
+export async function createProject(
+  name: string,
+  db: Database,
+): Promise<CreateProjectResult> {
   return db.transaction(async (tx) => {
     const apiKey = generateApiKey();
     const keyHash = hashApiKey(apiKey);
@@ -79,7 +82,7 @@ export async function createProject(name: string, db: Database): Promise<CreateP
 export async function createProjectForUser(
   name: string,
   userId: string,
-  db: Database
+  db: Database,
 ): Promise<CreateProjectResult> {
   return db.transaction(async (tx) => {
     const apiKey = generateApiKey();
@@ -112,7 +115,10 @@ export async function createProjectForUser(
 /**
  * List projects the user has access to.
  */
-export async function getUserProjects(userId: string, db: Database): Promise<UserProjectInfo[]> {
+export async function getUserProjects(
+  userId: string,
+  db: Database,
+): Promise<UserProjectInfo[]> {
   const rows = await db
     .select({
       id: projects.id,
@@ -137,7 +143,10 @@ export async function getUserProjects(userId: string, db: Database): Promise<Use
  * @param db - Drizzle database instance
  * @returns List of API keys with decrypted values
  */
-export async function getApiKeys(projectId: string, db: Database): Promise<ApiKeyInfo[]> {
+export async function getApiKeys(
+  projectId: string,
+  db: Database,
+): Promise<ApiKeyInfo[]> {
   const keys = await db
     .select({
       id: apiKeys.id,
@@ -174,7 +183,7 @@ export async function getApiKeys(projectId: string, db: Database): Promise<ApiKe
 export async function deleteApiKey(
   keyId: string,
   projectId: string,
-  db: Database
+  db: Database,
 ): Promise<boolean> {
   const result = await db
     .delete(apiKeys)
@@ -195,7 +204,7 @@ export async function deleteApiKey(
 export async function createApiKey(
   projectId: string,
   name: string,
-  db: Database
+  db: Database,
 ): Promise<string> {
   const apiKey = generateApiKey();
   const keyHash = hashApiKey(apiKey);
@@ -224,7 +233,7 @@ export async function updateApiKeyName(
   keyId: string,
   projectId: string,
   name: string,
-  db: Database
+  db: Database,
 ): Promise<boolean> {
   const result = await db
     .update(apiKeys)

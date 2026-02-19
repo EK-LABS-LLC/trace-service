@@ -25,7 +25,7 @@ export class AuthServiceError extends Error {
 
 export async function signupWithProject(
   input: SignupWithProjectInput,
-  db: Database
+  db: Database,
 ): Promise<void> {
   const name = input.name?.trim();
   const email = input.email?.trim().toLowerCase();
@@ -33,7 +33,10 @@ export async function signupWithProject(
   const projectName = input.projectName?.trim();
 
   if (!name || !email || !password || !projectName) {
-    throw new AuthServiceError("Missing required fields: name, email, password, projectName", 400);
+    throw new AuthServiceError(
+      "Missing required fields: name, email, password, projectName",
+      400,
+    );
   }
 
   let createdUserId: string | null = null;

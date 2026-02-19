@@ -36,26 +36,25 @@ Auth: Better Auth session cookie (`better-auth.session_token`)
 ### 1. Prerequisites
 
 - Bun 1.3+
-- Postgres 16+
 
 ### 2. Environment
 
 Required:
 
-- `DATABASE_URL` (Postgres connection string)
 - `PORT` (default `3000`)
 - `BETTER_AUTH_SECRET` (minimum 32 chars)
 - `BETTER_AUTH_URL` (public base URL, e.g. `http://localhost:3000`)
 
 Optional:
 
+- `DATABASE_PATH` (default `.data/pulse.db`)
 - `NODE_ENV` (`development` | `test` | `production`)
 - `ADMIN_KEY` (legacy/internal use)
 
 Example (local):
 
 ```bash
-export DATABASE_URL=postgres://pulse:pulse@localhost:5432/pulse
+export DATABASE_PATH=.data/pulse.db
 export PORT=3000
 export BETTER_AUTH_SECRET='replace-with-32+char-secret'
 export BETTER_AUTH_URL='http://localhost:3000'
@@ -88,7 +87,7 @@ From `trace-service/`:
 docker compose up --build
 ```
 
-This starts Postgres + trace-service on `http://localhost:3000`. Run the dashboard separately from `../pulse-dashboard`.
+This starts trace-service (with local SQLite at `.data/pulse.db`) on `http://localhost:3000`. Run the dashboard separately from `../pulse-dashboard`.
 
 ## SDK usage
 

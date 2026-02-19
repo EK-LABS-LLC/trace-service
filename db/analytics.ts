@@ -1,7 +1,18 @@
-import { eq, and, gte, lte, sql, sum, avg, count, isNotNull, desc } from "drizzle-orm";
+import {
+  eq,
+  and,
+  gte,
+  lte,
+  sql,
+  sum,
+  avg,
+  count,
+  isNotNull,
+  desc,
+} from "drizzle-orm";
 import type { Database } from "./index";
-import { traces } from "./schema";
-import type { GroupBy } from "../shared/validation";
+import { traces, spans } from "./schema";
+import type { GroupBy, SpanAnalyticsGroupBy } from "../shared/validation";
 
 /**
  * Date range filter for analytics queries.
@@ -74,7 +85,15 @@ function buildDateConditions(projectId: string, dateRange: DateRange) {
   return and(
     eq(traces.projectId, projectId),
     gte(traces.timestamp, dateRange.dateFrom),
-    lte(traces.timestamp, dateRange.dateTo)
+    lte(traces.timestamp, dateRange.dateTo),
+  );
+}
+
+function buildSpanDateConditions(projectId: string, dateRange: DateRange) {
+  return and(
+    eq(spans.projectId, projectId),
+    gte(spans.timestamp, dateRange.dateFrom),
+    lte(spans.timestamp, dateRange.dateTo),
   );
 }
 
@@ -84,7 +103,7 @@ function buildDateConditions(projectId: string, dateRange: DateRange) {
 export async function getTotalCost(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: sum(traces.costCents) })
@@ -100,7 +119,7 @@ export async function getTotalCost(
 export async function getTotalTokens(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<{ inputTokens: number; outputTokens: number; totalTokens: number }> {
   const result = await db
     .select({
@@ -126,7 +145,7 @@ export async function getTotalTokens(
 export async function getAvgLatency(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ avg: avg(traces.latencyMs) })
@@ -142,7 +161,7 @@ export async function getAvgLatency(
 export async function getErrorRate(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const conditions = buildDateConditions(projectId, dateRange);
 
@@ -171,14 +190,14 @@ export async function getCostOverTime(
   db: Database,
   projectId: string,
   dateRange: DateRange,
-  groupBy?: GroupBy
+  groupBy?: GroupBy,
 ): Promise<CostDataPoint[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
   let periodExpr: ReturnType<typeof sql>;
   switch (groupBy) {
     case "hour":
-      periodExpr = sql`date_trunc('hour', ${traces.timestamp})`;
+      periodExpr = sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`;
       break;
     case "model":
       periodExpr = sql`${traces.modelRequested}`;
@@ -188,7 +207,7 @@ export async function getCostOverTime(
       break;
     case "day":
     default:
-      periodExpr = sql`date_trunc('day', ${traces.timestamp})`;
+      periodExpr = sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
       break;
   }
 
@@ -214,7 +233,7 @@ export async function getCostOverTime(
 export async function getTotalRequests(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: count() })
@@ -230,12 +249,17 @@ export async function getTotalRequests(
 export async function getTotalSessions(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: sql<number>`COUNT(DISTINCT ${traces.sessionId})` })
     .from(traces)
-    .where(and(buildDateConditions(projectId, dateRange), isNotNull(traces.sessionId)));
+    .where(
+      and(
+        buildDateConditions(projectId, dateRange),
+        isNotNull(traces.sessionId),
+      ),
+    );
 
   return Number(result[0]?.total ?? 0);
 }
@@ -246,12 +270,17 @@ export async function getTotalSessions(
 export async function getErrorCount(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<number> {
   const result = await db
     .select({ total: count() })
     .from(traces)
-    .where(and(buildDateConditions(projectId, dateRange), eq(traces.status, "error")));
+    .where(
+      and(
+        buildDateConditions(projectId, dateRange),
+        eq(traces.status, "error"),
+      ),
+    );
 
   return result[0]?.total ?? 0;
 }
@@ -262,7 +291,7 @@ export async function getErrorCount(
 export async function getCostByProvider(
   db: Database,
   projectId: string,
-  dateRange: DateRange
+  dateRange: DateRange,
 ): Promise<CostByProvider[]> {
   const result = await db
     .select({
@@ -289,7 +318,7 @@ export async function getStatsByModel(
   db: Database,
   projectId: string,
   dateRange: DateRange,
-  limit: number = 10
+  limit: number = 10,
 ): Promise<StatsByModel[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
@@ -301,7 +330,7 @@ export async function getStatsByModel(
       costCents: sum(traces.costCents),
       avgLatency: avg(traces.latencyMs),
       totalTokens: sql<number>`SUM(COALESCE(${traces.inputTokens}, 0) + COALESCE(${traces.outputTokens}, 0))`,
-      errorCount: sql<number>`COUNT(*) FILTER (WHERE ${traces.status} = 'error')`,
+      errorCount: sql<number>`SUM(CASE WHEN ${traces.status} = 'error' THEN 1 ELSE 0 END)`,
     })
     .from(traces)
     .where(conditions)
@@ -316,91 +345,9 @@ export async function getStatsByModel(
     costCents: Number(row.costCents ?? 0),
     avgLatency: Number(row.avgLatency ?? 0),
     totalTokens: Number(row.totalTokens ?? 0),
-    errorRate: row.requests > 0 ? (Number(row.errorCount) / row.requests) * 100 : 0,
+    errorRate:
+      row.requests > 0 ? (Number(row.errorCount) / row.requests) * 100 : 0,
   }));
-}
-
-/**
- * Get latency distribution in buckets for a project within a date range.
- */
-export async function getLatencyDistribution(
-  db: Database,
-  projectId: string,
-  dateRange: DateRange
-): Promise<LatencyBucket[]> {
-  const conditions = and(buildDateConditions(projectId, dateRange), isNotNull(traces.latencyMs));
-
-  const result = await db
-    .select({
-      bucket: sql<string>`
-        CASE
-          WHEN ${traces.latencyMs} < 200 THEN '0-200'
-          WHEN ${traces.latencyMs} < 400 THEN '200-400'
-          WHEN ${traces.latencyMs} < 600 THEN '400-600'
-          WHEN ${traces.latencyMs} < 800 THEN '600-800'
-          WHEN ${traces.latencyMs} < 1000 THEN '800-1k'
-          WHEN ${traces.latencyMs} < 1500 THEN '1-1.5k'
-          WHEN ${traces.latencyMs} < 2000 THEN '1.5-2k'
-          ELSE '2k+'
-        END
-      `,
-      count: count(),
-    })
-    .from(traces)
-    .where(conditions).groupBy(sql`
-      CASE
-        WHEN ${traces.latencyMs} < 200 THEN '0-200'
-        WHEN ${traces.latencyMs} < 400 THEN '200-400'
-        WHEN ${traces.latencyMs} < 600 THEN '400-600'
-        WHEN ${traces.latencyMs} < 800 THEN '600-800'
-        WHEN ${traces.latencyMs} < 1000 THEN '800-1k'
-        WHEN ${traces.latencyMs} < 1500 THEN '1-1.5k'
-        WHEN ${traces.latencyMs} < 2000 THEN '1.5-2k'
-        ELSE '2k+'
-      END
-    `).orderBy(sql`
-      CASE
-        WHEN ${traces.latencyMs} < 200 THEN 1
-        WHEN ${traces.latencyMs} < 400 THEN 2
-        WHEN ${traces.latencyMs} < 600 THEN 3
-        WHEN ${traces.latencyMs} < 800 THEN 4
-        WHEN ${traces.latencyMs} < 1000 THEN 5
-        WHEN ${traces.latencyMs} < 1500 THEN 6
-        WHEN ${traces.latencyMs} < 2000 THEN 7
-        ELSE 8
-      END
-    `);
-
-  return result.map((row) => ({
-    bucket: row.bucket,
-    count: row.count,
-  }));
-}
-
-/**
- * Get latency percentiles (p50, p95, p99) for a project within a date range.
- */
-export async function getLatencyPercentiles(
-  db: Database,
-  projectId: string,
-  dateRange: DateRange
-): Promise<LatencyPercentiles> {
-  const conditions = and(buildDateConditions(projectId, dateRange), isNotNull(traces.latencyMs));
-
-  const result = await db
-    .select({
-      p50: sql<number>`PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY ${traces.latencyMs})`,
-      p95: sql<number>`PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY ${traces.latencyMs})`,
-      p99: sql<number>`PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY ${traces.latencyMs})`,
-    })
-    .from(traces)
-    .where(conditions);
-
-  return {
-    p50: Number(result[0]?.p50 ?? 0),
-    p95: Number(result[0]?.p95 ?? 0),
-    p99: Number(result[0]?.p99 ?? 0),
-  };
 }
 
 /**
@@ -410,13 +357,13 @@ export async function getCostOverTimeByProvider(
   db: Database,
   projectId: string,
   dateRange: DateRange,
-  groupBy: "day" | "hour" = "day"
+  groupBy: "day" | "hour" = "day",
 ): Promise<CostOverTimeByProvider[]> {
   const conditions = buildDateConditions(projectId, dateRange);
   const periodExpr =
     groupBy === "hour"
-      ? sql`date_trunc('hour', ${traces.timestamp})`
-      : sql`date_trunc('day', ${traces.timestamp})`;
+      ? sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`
+      : sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
 
   const result = await db
     .select({
@@ -433,5 +380,192 @@ export async function getCostOverTimeByProvider(
     period: String(row.period),
     provider: row.provider,
     costCents: Number(row.costCents ?? 0),
+  }));
+}
+
+export interface SpanCountByKind {
+  kind: string;
+  count: number;
+}
+
+export interface SpanCountBySource {
+  source: string;
+  count: number;
+}
+
+export interface SpanCountOverTime {
+  period: string;
+  count: number;
+}
+
+export interface TopToolUsage {
+  name: string;
+  count: number;
+}
+
+export async function getTotalSpanEvents(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const result = await db
+    .select({ total: count() })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange));
+
+  return result[0]?.total ?? 0;
+}
+
+export async function getSpanErrorRate(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const conditions = buildSpanDateConditions(projectId, dateRange);
+
+  const [totalResult, errorResult] = await Promise.all([
+    db.select({ count: count() }).from(spans).where(conditions),
+    db
+      .select({ count: count() })
+      .from(spans)
+      .where(and(conditions, eq(spans.status, "error"))),
+  ]);
+
+  const total = totalResult[0]?.count ?? 0;
+  const errors = errorResult[0]?.count ?? 0;
+  if (total === 0) {
+    return 0;
+  }
+
+  return (errors / total) * 100;
+}
+
+export async function getAvgSpanDuration(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const result = await db
+    .select({ avgDuration: avg(spans.durationMs) })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange));
+
+  return Number(result[0]?.avgDuration ?? 0);
+}
+
+export async function getSpanCountsByKind(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<SpanCountByKind[]> {
+  const result = await db
+    .select({
+      kind: spans.kind,
+      count: count(),
+    })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange))
+    .groupBy(spans.kind)
+    .orderBy(desc(count()));
+
+  return result.map((row) => ({
+    kind: row.kind,
+    count: row.count,
+  }));
+}
+
+export async function getSpanCountsBySource(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<SpanCountBySource[]> {
+  const result = await db
+    .select({
+      source: spans.source,
+      count: count(),
+    })
+    .from(spans)
+    .where(buildSpanDateConditions(projectId, dateRange))
+    .groupBy(spans.source)
+    .orderBy(desc(count()));
+
+  return result.map((row) => ({
+    source: row.source,
+    count: row.count,
+  }));
+}
+
+export async function getSpanCountsOverTime(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+  groupBy: SpanAnalyticsGroupBy = "day",
+): Promise<SpanCountOverTime[]> {
+  const conditions = buildSpanDateConditions(projectId, dateRange);
+  const periodExpr =
+    groupBy === "hour"
+      ? sql`strftime('%Y-%m-%d %H:00:00', ${spans.timestamp} / 1000, 'unixepoch')`
+      : sql`strftime('%Y-%m-%d', ${spans.timestamp} / 1000, 'unixepoch')`;
+
+  const result = await db
+    .select({
+      period: periodExpr.as("period"),
+      count: count(),
+    })
+    .from(spans)
+    .where(conditions)
+    .groupBy(periodExpr)
+    .orderBy(periodExpr);
+
+  return result.map((row) => ({
+    period: String(row.period),
+    count: row.count,
+  }));
+}
+
+export async function getAvgSessionSpanDuration(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+): Promise<number> {
+  const result = await db
+    .select({ avgDuration: avg(spans.durationMs) })
+    .from(spans)
+    .where(
+      and(
+        buildSpanDateConditions(projectId, dateRange),
+        eq(spans.kind, "session"),
+      ),
+    );
+
+  return Number(result[0]?.avgDuration ?? 0);
+}
+
+export async function getTopTools(
+  db: Database,
+  projectId: string,
+  dateRange: DateRange,
+  limit: number = 5,
+): Promise<TopToolUsage[]> {
+  const result = await db
+    .select({
+      name: spans.toolName,
+      count: count(),
+    })
+    .from(spans)
+    .where(
+      and(
+        buildSpanDateConditions(projectId, dateRange),
+        eq(spans.kind, "tool_use"),
+        isNotNull(spans.toolName),
+      ),
+    )
+    .groupBy(spans.toolName)
+    .orderBy(desc(count()))
+    .limit(limit);
+
+  return result.map((row) => ({
+    name: row.name ?? "unknown",
+    count: row.count,
   }));
 }

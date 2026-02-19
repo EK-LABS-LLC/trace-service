@@ -4,7 +4,10 @@ import { db } from "../db";
 import { userProjects } from "../db/schema";
 import { normalizeProjectRole } from "../services/project-roles";
 
-export async function projectContextMiddleware(c: Context, next: Next): Promise<Response | void> {
+export async function projectContextMiddleware(
+  c: Context,
+  next: Next,
+): Promise<Response | void> {
   const projectId = c.req.header("X-Project-Id");
   if (!projectId) {
     return c.json({ error: "Missing X-Project-Id header" }, 400);
@@ -15,7 +18,12 @@ export async function projectContextMiddleware(c: Context, next: Next): Promise<
   const [access] = await db
     .select({ id: userProjects.id, role: userProjects.role })
     .from(userProjects)
-    .where(and(eq(userProjects.userId, userId), eq(userProjects.projectId, projectId)))
+    .where(
+      and(
+        eq(userProjects.userId, userId),
+        eq(userProjects.projectId, projectId),
+      ),
+    )
     .limit(1);
 
   if (!access) {
@@ -27,11 +35,19 @@ export async function projectContextMiddleware(c: Context, next: Next): Promise<
   await next();
 }
 
-export async function requireProjectAdmin(c: Context, next: Next): Promise<Response | void> {
-  const role = normalizeProjectRole(c.get("projectRole") as string | null | undefined);
+export async function requireProjectAdmin(
+  c: Context,
+  next: Next,
+): Promise<Response | void> {
+  const role = normalizeProjectRole(
+    c.get("projectRole") as string | null | undefined,
+  );
 
   if (role !== "admin") {
-    return c.json({ error: "Forbidden: admin role required for this operation" }, 403);
+    return c.json(
+      { error: "Forbidden: admin role required for this operation" },
+      403,
+    );
   }
 
   await next();

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { traceSchema, batchTraceSchema, providerSchema, statusSchema } from "../shared/validation";
+import {
+  traceSchema,
+  batchTraceSchema,
+  providerSchema,
+  statusSchema,
+} from "../shared/validation";
 
 /**
  * Helper to create a valid trace object for testing
@@ -82,7 +87,10 @@ describe("traceSchema", () => {
       expect(result.finish_reason).toBe("stop");
       expect(result.cost_cents).toBe(0.05);
       expect(result.session_id).toBe("660e8400-e29b-41d4-a716-446655440001");
-      expect(result.metadata).toEqual({ user_id: "user123", env: "production" });
+      expect(result.metadata).toEqual({
+        user_id: "user123",
+        env: "production",
+      });
     });
 
     it("parses a trace with error status and error object", () => {
@@ -290,7 +298,7 @@ describe("batchTraceSchema", () => {
     const traces = Array.from({ length: 100 }, (_, i) =>
       createValidTrace({
         trace_id: `550e8400-e29b-41d4-a716-44665544${String(i).padStart(4, "0")}`,
-      })
+      }),
     );
     const result = batchTraceSchema.parse(traces);
     expect(result).toHaveLength(100);
@@ -300,7 +308,7 @@ describe("batchTraceSchema", () => {
     const traces = Array.from({ length: 101 }, (_, i) =>
       createValidTrace({
         trace_id: `550e8400-e29b-41d4-a716-44665544${String(i).padStart(4, "0")}`,
-      })
+      }),
     );
     expect(() => batchTraceSchema.parse(traces)).toThrow();
   });

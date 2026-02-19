@@ -5,7 +5,10 @@ import { env } from "../config";
  * Admin authentication middleware for protected admin routes.
  * Validates X-Admin-Key header or admin_key query param against ADMIN_KEY env var.
  */
-export async function adminAuthMiddleware(c: Context, next: Next): Promise<Response | void> {
+export async function adminAuthMiddleware(
+  c: Context,
+  next: Next,
+): Promise<Response | void> {
   const adminKey = env.ADMIN_KEY;
 
   if (!adminKey) {
