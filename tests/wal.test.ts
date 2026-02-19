@@ -7,6 +7,7 @@ import {
 } from "./setup";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { resolveDataPaths } from "../lib/data-paths";
 
 interface WALRecord {
   sequence: number;
@@ -42,7 +43,7 @@ interface TracesResponse {
  * WAL File Helpers - only for reading and verifying storage
  */
 function getWalDir(): string {
-  return join(process.cwd(), ".data", "wal");
+  return process.env.WAL_DIR ?? resolveDataPaths(process.env).walDir;
 }
 
 function getSegmentsDir(): string {

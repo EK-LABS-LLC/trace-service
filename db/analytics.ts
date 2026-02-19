@@ -11,6 +11,7 @@ import {
   desc,
 } from "drizzle-orm";
 import type { Database } from "./index";
+import { getDbDialect } from "./index";
 import { traces, spans } from "./schema";
 import type { GroupBy, SpanAnalyticsGroupBy } from "../shared/validation";
 
@@ -95,6 +96,46 @@ function buildSpanDateConditions(projectId: string, dateRange: DateRange) {
     gte(spans.timestamp, dateRange.dateFrom),
     lte(spans.timestamp, dateRange.dateTo),
   );
+}
+
+function tracePeriodExpr(groupBy?: GroupBy): ReturnType<typeof sql> {
+  if (getDbDialect() === "postgres") {
+    switch (groupBy) {
+      case "hour":
+        return sql`to_char(date_trunc('hour', ${traces.timestamp}), 'YYYY-MM-DD HH24:00:00')`;
+      case "model":
+        return sql`${traces.modelRequested}`;
+      case "provider":
+        return sql`${traces.provider}`;
+      case "day":
+      default:
+        return sql`to_char(date_trunc('day', ${traces.timestamp}), 'YYYY-MM-DD')`;
+    }
+  }
+
+  switch (groupBy) {
+    case "hour":
+      return sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`;
+    case "model":
+      return sql`${traces.modelRequested}`;
+    case "provider":
+      return sql`${traces.provider}`;
+    case "day":
+    default:
+      return sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
+  }
+}
+
+function spanPeriodExpr(groupBy: SpanAnalyticsGroupBy = "day"): ReturnType<typeof sql> {
+  if (getDbDialect() === "postgres") {
+    return groupBy === "hour"
+      ? sql`to_char(date_trunc('hour', ${spans.timestamp}), 'YYYY-MM-DD HH24:00:00')`
+      : sql`to_char(date_trunc('day', ${spans.timestamp}), 'YYYY-MM-DD')`;
+  }
+
+  return groupBy === "hour"
+    ? sql`strftime('%Y-%m-%d %H:00:00', ${spans.timestamp} / 1000, 'unixepoch')`
+    : sql`strftime('%Y-%m-%d', ${spans.timestamp} / 1000, 'unixepoch')`;
 }
 
 /**
@@ -194,22 +235,7 @@ export async function getCostOverTime(
 ): Promise<CostDataPoint[]> {
   const conditions = buildDateConditions(projectId, dateRange);
 
-  let periodExpr: ReturnType<typeof sql>;
-  switch (groupBy) {
-    case "hour":
-      periodExpr = sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`;
-      break;
-    case "model":
-      periodExpr = sql`${traces.modelRequested}`;
-      break;
-    case "provider":
-      periodExpr = sql`${traces.provider}`;
-      break;
-    case "day":
-    default:
-      periodExpr = sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
-      break;
-  }
+  const periodExpr = tracePeriodExpr(groupBy);
 
   const result = await db
     .select({
@@ -221,7 +247,7 @@ export async function getCostOverTime(
     .groupBy(periodExpr)
     .orderBy(periodExpr);
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     period: String(row.period),
     costCents: Number(row.costCents ?? 0),
   }));
@@ -304,7 +330,7 @@ export async function getCostByProvider(
     .groupBy(traces.provider)
     .orderBy(desc(sum(traces.costCents)));
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     provider: row.provider,
     costCents: Number(row.costCents ?? 0),
     requests: row.requests,
@@ -338,7 +364,7 @@ export async function getStatsByModel(
     .orderBy(desc(count()))
     .limit(limit);
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     provider: row.provider,
     model: row.model,
     requests: row.requests,
@@ -360,10 +386,7 @@ export async function getCostOverTimeByProvider(
   groupBy: "day" | "hour" = "day",
 ): Promise<CostOverTimeByProvider[]> {
   const conditions = buildDateConditions(projectId, dateRange);
-  const periodExpr =
-    groupBy === "hour"
-      ? sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`
-      : sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
+  const periodExpr = tracePeriodExpr(groupBy);
 
   const result = await db
     .select({
@@ -376,7 +399,7 @@ export async function getCostOverTimeByProvider(
     .groupBy(periodExpr, traces.provider)
     .orderBy(periodExpr, traces.provider);
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     period: String(row.period),
     provider: row.provider,
     costCents: Number(row.costCents ?? 0),
@@ -468,7 +491,7 @@ export async function getSpanCountsByKind(
     .groupBy(spans.kind)
     .orderBy(desc(count()));
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     kind: row.kind,
     count: row.count,
   }));
@@ -489,7 +512,7 @@ export async function getSpanCountsBySource(
     .groupBy(spans.source)
     .orderBy(desc(count()));
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     source: row.source,
     count: row.count,
   }));
@@ -502,10 +525,7 @@ export async function getSpanCountsOverTime(
   groupBy: SpanAnalyticsGroupBy = "day",
 ): Promise<SpanCountOverTime[]> {
   const conditions = buildSpanDateConditions(projectId, dateRange);
-  const periodExpr =
-    groupBy === "hour"
-      ? sql`strftime('%Y-%m-%d %H:00:00', ${spans.timestamp} / 1000, 'unixepoch')`
-      : sql`strftime('%Y-%m-%d', ${spans.timestamp} / 1000, 'unixepoch')`;
+  const periodExpr = spanPeriodExpr(groupBy);
 
   const result = await db
     .select({
@@ -517,7 +537,7 @@ export async function getSpanCountsOverTime(
     .groupBy(periodExpr)
     .orderBy(periodExpr);
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     period: String(row.period),
     count: row.count,
   }));
@@ -564,7 +584,7 @@ export async function getTopTools(
     .orderBy(desc(count()))
     .limit(limit);
 
-  return result.map((row) => ({
+  return result.map((row: any) => ({
     name: row.name ?? "unknown",
     count: row.count,
   }));

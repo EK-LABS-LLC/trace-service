@@ -33,11 +33,18 @@ Auth: Better Auth session cookie (`better-auth.session_token`)
 
 ## Self-hosting
 
+Operational runbooks live in `docs/operations.md`.
+
 ### 1. Prerequisites
 
 - Bun 1.3+
 
-### 2. Environment
+### 2. Choose a Mode
+
+- `single` (default): SQLite + local WAL, optimized for single-node installs.
+- `scale`: Postgres + partitioned WAL listeners, optimized for higher ingest rates.
+
+### 3. Environment
 
 Required:
 
@@ -47,30 +54,68 @@ Required:
 
 Optional:
 
-- `DATABASE_PATH` (default `.data/pulse.db`)
+- `PULSE_MODE` (`single` | `scale`, default `single`)
+- `PULSE_RUNTIME_MODE` (`all` | `api` | `listener`, default `all`)
+- `PULSE_HOME` (default `~/.pulse`)
+- `PULSE_DATA_DIR` (default `~/.pulse/.data`)
+- `DATABASE_PATH` (default `~/.pulse/.data/pulse.db`)
+- `DATABASE_URL` (required for `scale`, e.g. `postgresql://pulse:pulse@localhost:5432/pulse`)
 - `NODE_ENV` (`development` | `test` | `production`)
 - `ADMIN_KEY` (legacy/internal use)
+- `TRACE_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
+- `SPAN_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
 
 Example (local):
 
 ```bash
-export DATABASE_PATH=.data/pulse.db
 export PORT=3000
 export BETTER_AUTH_SECRET='replace-with-32+char-secret'
 export BETTER_AUTH_URL='http://localhost:3000'
 ```
 
-### 3. Install + migrate
+Scale mode example:
+
+```bash
+export PULSE_MODE=scale
+export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
+export PORT=3000
+export BETTER_AUTH_SECRET='replace-with-32+char-secret'
+export BETTER_AUTH_URL='http://localhost:3000'
+```
+
+### 4. Install + migrate
 
 ```bash
 bun install
 bun run db:migrate
 ```
 
-### 4. Start service
+For `scale` mode:
 
 ```bash
-bun run dev
+bun run db:migrate:scale
+```
+
+### 5. Start service
+
+```bash
+bun run dev:single
+```
+
+Scale mode:
+
+```bash
+bun run dev:scale
+```
+
+Split API and listeners into separate processes:
+
+```bash
+# API process only
+PULSE_RUNTIME_MODE=api bun run dev:scale
+
+# Listener process only
+PULSE_RUNTIME_MODE=listener bun run dev:scale
 ```
 
 Service health:
@@ -79,15 +124,78 @@ Service health:
 curl http://localhost:3000/health
 ```
 
-## Docker (quick start)
-
-From `trace-service/`:
+### 6. Build Executables
 
 ```bash
-docker compose up --build
+bun run build:pulse
+bun run build:pulse-scale
 ```
 
-This starts trace-service (with local SQLite at `.data/pulse.db`) on `http://localhost:3000`. Run the dashboard separately from `../pulse-dashboard`.
+Artifacts:
+
+- `dist/pulse` (single mode)
+- `dist/pulse-scale` (scale mode)
+
+### 7. Publish Release Artifacts
+
+Tag and push a version:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+This triggers `.github/workflows/release.yml`, which builds and publishes:
+
+- `pulse-linux-amd64`
+- `pulse-linux-arm64`
+- `pulse-darwin-amd64`
+- `pulse-darwin-arm64`
+- `pulse-scale-linux-amd64`
+- `pulse-scale-linux-arm64`
+- `pulse-scale-darwin-amd64`
+- `pulse-scale-darwin-arm64`
+- `checksums.txt`
+
+You can also run the release workflow manually from GitHub Actions.
+
+### 8. Install Binary
+
+Install latest `pulse`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse
+```
+
+Install latest `pulse-scale`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-scale
+```
+
+Install a specific tag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/v0.1.0/scripts/install.sh | bash -s -- pulse --version v0.1.0
+```
+
+## Local Postgres Helper (Scale Mode)
+
+For scale-mode tests/dev, start only Postgres:
+
+```bash
+make up
+make test-e2e-scale
+make down
+```
+
+Equivalent explicit commands:
+
+```bash
+make scale-up
+make test-e2e-scale
+make scale-down
+```
 
 ## SDK usage
 
@@ -164,4 +272,11 @@ Tests are integration-oriented and assume service is reachable at `http://localh
 
 ```bash
 bun test --env-file=.env.test
+```
+
+End-to-end harness (starts service automatically):
+
+```bash
+make test-e2e
+make test-e2e-scale
 ```

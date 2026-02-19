@@ -49,7 +49,7 @@ export async function getProjectUsers(
     .innerJoin(user, eq(userProjects.userId, user.id))
     .where(eq(userProjects.projectId, projectId));
 
-  return rows.map((row) => ({
+  return rows.map((row: any) => ({
     userId: row.userId,
     name: row.name,
     email: row.email,

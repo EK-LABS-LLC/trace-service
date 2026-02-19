@@ -1,17 +1,23 @@
 {
   "name": "trace-service",
-  "module": "index.ts",
+  "module": "pulse.ts",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run index.ts",
+    "dev": "bun run pulse.ts",
+    "dev:single": "bun run pulse.ts",
+    "dev:scale": "bun run pulse-scale.ts",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
+    "db:migrate:scale": "bunx drizzle-kit push --config=drizzle.scale.config.ts",
     "db:push": "bunx drizzle-kit push",
     "db:studio": "bunx drizzle-kit studio",
     "db:seed": "bun run scripts/seed.ts",
     "db:reset": "bun run scripts/reset.ts",
     "db:snapshot": "bunx drizzle-kit generate",
+    "build:pulse": "bun build ./pulse.ts --compile --outfile ./dist/pulse",
+    "build:pulse-scale": "bun build ./pulse-scale.ts --compile --outfile ./dist/pulse-scale",
+    "release:artifacts": "bun run scripts/release.ts",
     "test": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",
     "format": "bunx prettier --write \"**/*.{ts,tsx,js,json}\""
@@ -29,6 +35,7 @@
     "better-auth": "^1.4.18",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.5",
+    "postgres": "^3.4.7",
     "uuid": "^13.0.0",
     "zod": "^4.3.6"
   }

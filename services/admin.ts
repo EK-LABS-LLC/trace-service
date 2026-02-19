@@ -54,7 +54,7 @@ export async function createProject(
   name: string,
   db: Database,
 ): Promise<CreateProjectResult> {
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx: any) => {
     const apiKey = generateApiKey();
     const keyHash = hashApiKey(apiKey);
     const encryptedKey = encryptApiKey(apiKey);
@@ -84,7 +84,7 @@ export async function createProjectForUser(
   userId: string,
   db: Database,
 ): Promise<CreateProjectResult> {
-  return db.transaction(async (tx) => {
+  return db.transaction(async (tx: any) => {
     const apiKey = generateApiKey();
     const keyHash = hashApiKey(apiKey);
     const encryptedKey = encryptApiKey(apiKey);
@@ -130,7 +130,7 @@ export async function getUserProjects(
     .innerJoin(projects, eq(userProjects.projectId, projects.id))
     .where(eq(userProjects.userId, userId));
 
-  return rows.map((row) => ({
+  return rows.map((row: any) => ({
     ...row,
     role: normalizeProjectRole(row.role),
   }));
@@ -161,7 +161,7 @@ export async function getApiKeys(
     .innerJoin(projects, eq(apiKeys.projectId, projects.id))
     .where(eq(apiKeys.projectId, projectId));
 
-  return keys.map((k) => ({
+  return keys.map((k: any) => ({
     id: k.id,
     projectId: k.projectId,
     projectName: k.projectName,

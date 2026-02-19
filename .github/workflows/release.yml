@@ -1,0 +1,99 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (for example v0.1.0). Defaults to current ref name."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: bun-linux-x64
+            os: linux
+            arch: amd64
+          - target: bun-linux-arm64
+            os: linux
+            arch: arm64
+          - target: bun-darwin-x64
+            os: darwin
+            arch: amd64
+          - target: bun-darwin-arm64
+            os: darwin
+            arch: arm64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.5"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binaries for ${{ matrix.target }}
+        run: |
+          mkdir -p dist
+          bun build ./pulse.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-${{ matrix.os }}-${{ matrix.arch }}
+          bun build ./pulse-scale.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-scale-${{ matrix.os }}-${{ matrix.arch }}
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/pulse-${{ matrix.os }}-${{ matrix.arch }}
+            dist/pulse-scale-${{ matrix.os }}-${{ matrix.arch }}
+          if-no-files-found: error
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum pulse-* > checksums.txt
+
+      - name: Resolve tag
+        id: tag
+        env:
+          TAG_INPUT: ${{ github.event.inputs.tag }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ -n "${TAG_INPUT:-}" ]]; then
+            TAG="${TAG_INPUT}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            dist/pulse-*
+            dist/pulse-scale-*
+            dist/checksums.txt
+          generate_release_notes: true

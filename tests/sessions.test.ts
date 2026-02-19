@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import {
+  BASE_URL,
   authFetch,
   createTestProject,
   createTestTraces,
@@ -79,9 +80,7 @@ describe("Sessions Endpoint", () => {
     });
 
     test("returns 401 without auth", async () => {
-      const response = await fetch(
-        `http://localhost:3000/v1/sessions/${sessionId}`,
-      );
+      const response = await fetch(`${BASE_URL}/v1/sessions/${sessionId}`);
 
       expect(response.status).toBe(401);
     });

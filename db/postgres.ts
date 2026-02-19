@@ -1,5 +1,5 @@
-import { eq, and, gte, lte, count, desc, asc } from "drizzle-orm";
-import { traces, sessions, spans } from "./schema-single";
+import { eq, and, gte, lte, count, sql } from "drizzle-orm";
+import { traces, sessions, spans } from "./schema-scale";
 import type {
   Trace,
   NewTrace,
@@ -7,7 +7,7 @@ import type {
   NewSession,
   Span,
   NewSpan,
-} from "./schema-single";
+} from "./schema-scale";
 import type {
   StorageAdapter,
   TraceQueryFilters,
@@ -17,10 +17,10 @@ import type {
 } from "./adapter";
 
 /**
- * SQLite implementation of the StorageAdapter interface.
+ * PostgreSQL implementation of the StorageAdapter interface.
  * This is the default storage backend for Pulse.
  */
-export class SqliteStorage implements StorageAdapter {
+export class PostgresStorage implements StorageAdapter {
   constructor(private db: any) {}
 
   async insertTrace(projectId: string, trace: NewTrace): Promise<Trace> {
@@ -97,7 +97,7 @@ export class SqliteStorage implements StorageAdapter {
       .select()
       .from(traces)
       .where(whereClause)
-      .orderBy(desc(traces.timestamp))
+      .orderBy(sql`${traces.timestamp} DESC`)
       .limit(limit)
       .offset(offset);
 
@@ -165,7 +165,7 @@ export class SqliteStorage implements StorageAdapter {
       .where(
         and(eq(traces.sessionId, sessionId), eq(traces.projectId, projectId)),
       )
-      .orderBy(asc(traces.timestamp));
+      .orderBy(sql`${traces.timestamp} ASC`);
   }
 
   async getSessionSpans(
@@ -176,7 +176,7 @@ export class SqliteStorage implements StorageAdapter {
       .select()
       .from(spans)
       .where(and(eq(spans.sessionId, sessionId), eq(spans.projectId, projectId)))
-      .orderBy(asc(spans.timestamp));
+      .orderBy(sql`${spans.timestamp} ASC`);
   }
 
   async insertSpan(projectId: string, span: NewSpan): Promise<Span> {
@@ -255,7 +255,7 @@ export class SqliteStorage implements StorageAdapter {
       .select()
       .from(spans)
       .where(whereClause)
-      .orderBy(desc(spans.timestamp))
+      .orderBy(sql`${spans.timestamp} DESC`)
       .limit(limit)
       .offset(offset);
 
