@@ -31,10 +31,15 @@ function getArg(name: string): string | undefined {
   return found ? found.slice(key.length) : undefined;
 }
 
-function parseIntArg(value: string | undefined, fallback: number): number {
+function parseIntArg(
+  value: string | undefined,
+  fallback: number,
+  options?: { min?: number },
+): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  const min = options?.min ?? 1;
+  return Number.isFinite(parsed) && parsed >= min ? parsed : fallback;
 }
 
 function parseArgs(): Args {
@@ -53,12 +58,18 @@ function parseArgs(): Args {
     tracesPerSession: parseIntArg(
       getArg("traces-per-session") ?? process.env.SEED_TRACES_PER_SESSION,
       20,
+      { min: 0 },
     ),
     spansPerSession: parseIntArg(
       getArg("spans-per-session") ?? process.env.SEED_SPANS_PER_SESSION,
       30,
+      { min: 0 },
     ),
-    daysBack: parseIntArg(getArg("days-back") ?? process.env.SEED_DAYS_BACK, 14),
+    daysBack: parseIntArg(
+      getArg("days-back") ?? process.env.SEED_DAYS_BACK,
+      14,
+      { min: 0 },
+    ),
   };
 }
 

@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: pulse
       POSTGRES_PASSWORD: pulse
     volumes:
-      - ../.data/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U pulse -d pulse"]
       interval: 5s
@@ -37,3 +37,6 @@ services:
       ENCRYPTION_KEY: 8d2a52c8333cabd7d3e49fd6a60da5574f5722d64fc4a2b211390a1634553a03
     volumes:
       - ./.data:/app/.data
+
+volumes:
+  postgres_data:

@@ -34,7 +34,7 @@ export interface TraceQueryResult {
  */
 export interface SpanQueryFilters {
   sessionId?: string;
-  source?: "claude_code";
+  source?: "claude_code" | "opencode" | "openclaw";
   kind?: "tool_use" | "agent_run" | "session" | "user_prompt" | "notification";
   toolName?: string;
   status?: "success" | "error";
