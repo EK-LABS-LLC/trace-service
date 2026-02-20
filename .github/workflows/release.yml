@@ -49,16 +49,16 @@ jobs:
       - name: Build binaries for ${{ matrix.target }}
         run: |
           mkdir -p dist
-          bun build ./pulse.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-${{ matrix.os }}-${{ matrix.arch }}
-          bun build ./pulse-scale.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-scale-${{ matrix.os }}-${{ matrix.arch }}
+          bun build ./pulse.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-server-${{ matrix.os }}-${{ matrix.arch }}
+          bun build ./pulse-scale.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-server-scale-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.os }}-${{ matrix.arch }}
           path: |
-            dist/pulse-${{ matrix.os }}-${{ matrix.arch }}
-            dist/pulse-scale-${{ matrix.os }}-${{ matrix.arch }}
+            dist/pulse-server-${{ matrix.os }}-${{ matrix.arch }}
+            dist/pulse-server-scale-${{ matrix.os }}-${{ matrix.arch }}
           if-no-files-found: error
 
   publish:
@@ -74,7 +74,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum pulse-* > checksums.txt
+          sha256sum pulse-server-* > checksums.txt
 
       - name: Resolve tag
         id: tag
@@ -93,9 +93,9 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           target_commitish: ${{ github.sha }}
           files: |
-            dist/pulse-linux-*
-            dist/pulse-darwin-*
-            dist/pulse-scale-linux-*
-            dist/pulse-scale-darwin-*
+            dist/pulse-server-linux-*
+            dist/pulse-server-darwin-*
+            dist/pulse-server-scale-linux-*
+            dist/pulse-server-scale-darwin-*
             dist/checksums.txt
           generate_release_notes: true

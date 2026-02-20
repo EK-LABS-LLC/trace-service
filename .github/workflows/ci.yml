@@ -118,6 +118,6 @@ jobs:
         with:
           name: pulse-binaries
           path: |
-            dist/pulse
-            dist/pulse-scale
+            dist/pulse-server
+            dist/pulse-server-scale
             dist/checksums.txt

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 const DIST_DIR = "dist";
-const ARTIFACTS = ["pulse", "pulse-scale"] as const;
+const ARTIFACTS = ["pulse-server", "pulse-server-scale"] as const;
 
 function run(command: string[]): void {
   const proc = Bun.spawnSync({

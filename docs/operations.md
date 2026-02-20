@@ -2,8 +2,8 @@
 
 ## Modes
 
-- `pulse` (single mode): local SQLite file (`~/.pulse/.data/pulse.db` by default), single-node.
-- `pulse-scale` (scale mode): Postgres plus partitioned WAL listeners.
+- `pulse-server` (single mode): local SQLite file (`~/.pulse/.data/pulse.db` by default), single-node.
+- `pulse-server-scale` (scale mode): Postgres plus partitioned WAL listeners.
 
 ## Single Mode Runbook
 
@@ -33,7 +33,7 @@ Stop with `Ctrl+C` (graceful shutdown is wired).
 bun run build:pulse
 ```
 
-Binary output: `dist/pulse`.
+Binary output: `dist/pulse-server`.
 
 ## Scale Mode Runbook
 
@@ -80,7 +80,7 @@ PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse-scale.ts
 bun run build:pulse-scale
 ```
 
-Binary output: `dist/pulse-scale`.
+Binary output: `dist/pulse-server-scale`.
 
 ## Local Scale Testing
 
@@ -112,6 +112,6 @@ bun run release:artifacts
 
 Outputs:
 
-- `dist/pulse`
-- `dist/pulse-scale`
+- `dist/pulse-server`
+- `dist/pulse-server-scale`
 - `dist/checksums.txt`

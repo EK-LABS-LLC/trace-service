@@ -133,8 +133,8 @@ bun run build:pulse-scale
 
 Artifacts:
 
-- `dist/pulse` (single mode)
-- `dist/pulse-scale` (scale mode)
+- `dist/pulse-server` (single mode)
+- `dist/pulse-server-scale` (scale mode)
 
 ### 7. Publish Release Artifacts
 
@@ -147,36 +147,42 @@ git push origin v0.1.0
 
 This triggers `.github/workflows/release.yml`, which builds and publishes:
 
-- `pulse-linux-amd64`
-- `pulse-linux-arm64`
-- `pulse-darwin-amd64`
-- `pulse-darwin-arm64`
-- `pulse-scale-linux-amd64`
-- `pulse-scale-linux-arm64`
-- `pulse-scale-darwin-amd64`
-- `pulse-scale-darwin-arm64`
+- `pulse-server-linux-amd64`
+- `pulse-server-linux-arm64`
+- `pulse-server-darwin-amd64`
+- `pulse-server-darwin-arm64`
+- `pulse-server-scale-linux-amd64`
+- `pulse-server-scale-linux-arm64`
+- `pulse-server-scale-darwin-amd64`
+- `pulse-server-scale-darwin-arm64`
 - `checksums.txt`
 
 You can also run the release workflow manually from GitHub Actions.
 
-### 8. Install Binary
+### 8. Install Binaries (Server + CLI)
 
-Install latest `pulse`:
+Install latest `pulse-server` and `pulse` CLI together:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server
 ```
 
-Install latest `pulse-scale`:
+Install latest `pulse-server-scale` and `pulse` CLI together:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-scale
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server-scale
 ```
 
 Install a specific tag:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/v0.1.0/scripts/install.sh | bash -s -- pulse --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server --version v0.1.0
+```
+
+Install server only (skip CLI):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server --server-only
 ```
 
 ## Local Postgres Helper (Scale Mode)
