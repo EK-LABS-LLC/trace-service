@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 const DIST_DIR = "dist";
-const ARTIFACTS = ["pulse-server", "pulse-server-scale"] as const;
+const ARTIFACTS = ["pulse-server"] as const;
 
 function run(command: string[]): void {
   const proc = Bun.spawnSync({
@@ -23,7 +23,6 @@ function sha256(path: string): string {
 }
 
 run(["bun", "run", "build:pulse"]);
-run(["bun", "run", "build:pulse-scale"]);
 
 const lines: string[] = [];
 for (const artifact of ARTIFACTS) {

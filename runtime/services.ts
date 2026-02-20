@@ -27,7 +27,7 @@ export function initializeRuntimeServices(services: RuntimeServices): void {
 export function getRuntimeServices(): RuntimeServices {
   if (!runtimeServices) {
     throw new Error(
-      "Runtime services are not initialized. Start via pulse.ts or pulse-scale.ts",
+      "Runtime services are not initialized. Start via pulse.ts (set PULSE_MODE=single|scale).",
     );
   }
   return runtimeServices;

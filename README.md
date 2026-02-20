@@ -49,8 +49,9 @@ Operational runbooks live in `docs/operations.md`.
 Required:
 
 - `PORT` (default `3000`)
-- `BETTER_AUTH_SECRET` (minimum 32 chars)
-- `BETTER_AUTH_URL` (public base URL, e.g. `http://localhost:3000`)
+- `BETTER_AUTH_SECRET` (minimum 32 chars, signs dashboard auth sessions/cookies)
+- `ENCRYPTION_KEY` (minimum 32 chars, encrypts stored API keys at rest)
+- `BETTER_AUTH_URL` (public base URL used by auth/session flows, e.g. `http://localhost:3000`)
 
 Optional:
 
@@ -69,7 +70,11 @@ Example (local):
 
 ```bash
 export PORT=3000
-export BETTER_AUTH_SECRET='replace-with-32+char-secret'
+# 32+ chars for signing dashboard sessions/cookies
+export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+# 32+ chars for encrypting API keys at rest
+export ENCRYPTION_KEY="$(openssl rand -hex 32)"
+# Public URL clients use to reach this service
 export BETTER_AUTH_URL='http://localhost:3000'
 ```
 
@@ -79,7 +84,11 @@ Scale mode example:
 export PULSE_MODE=scale
 export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
 export PORT=3000
-export BETTER_AUTH_SECRET='replace-with-32+char-secret'
+# 32+ chars for signing dashboard sessions/cookies
+export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+# 32+ chars for encrypting API keys at rest
+export ENCRYPTION_KEY="$(openssl rand -hex 32)"
+# Public URL clients use to reach this service
 export BETTER_AUTH_URL='http://localhost:3000'
 ```
 
@@ -128,13 +137,11 @@ curl http://localhost:3000/health
 
 ```bash
 bun run build:pulse
-bun run build:pulse-scale
 ```
 
 Artifacts:
 
-- `dist/pulse-server` (single mode)
-- `dist/pulse-server-scale` (scale mode)
+- `dist/pulse-server` (single or scale mode via `PULSE_MODE`)
 
 ### 7. Publish Release Artifacts
 
@@ -151,10 +158,6 @@ This triggers `.github/workflows/release.yml`, which builds and publishes:
 - `pulse-server-linux-arm64`
 - `pulse-server-darwin-amd64`
 - `pulse-server-darwin-arm64`
-- `pulse-server-scale-linux-amd64`
-- `pulse-server-scale-linux-arm64`
-- `pulse-server-scale-darwin-amd64`
-- `pulse-server-scale-darwin-arm64`
 - `checksums.txt`
 
 You can also run the release workflow manually from GitHub Actions.
@@ -167,12 +170,6 @@ Install latest `pulse-server` and `pulse` CLI together:
 curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server
 ```
 
-Install latest `pulse-server-scale` and `pulse` CLI together:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server-scale
-```
-
 Install a specific tag:
 
 ```bash
@@ -183,6 +180,14 @@ Install server only (skip CLI):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server --server-only
+```
+
+Run installed binary in scale mode:
+
+```bash
+export PULSE_MODE=scale
+export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
+pulse-server
 ```
 
 ## Local Postgres Helper (Scale Mode)

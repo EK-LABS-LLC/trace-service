@@ -8,6 +8,7 @@ VERSION="${PULSE_VERSION:-latest}"
 CLI_VERSION="${PULSE_CLI_VERSION:-latest}"
 INSTALL_DIR="${PULSE_INSTALL_DIR:-$HOME/.local/bin}"
 INSTALL_CLI=1
+REQUESTED_SCALE_MODE=0
 
 usage() {
   cat <<'EOF'
@@ -15,7 +16,8 @@ Usage: install.sh [pulse-server|pulse-server-scale] [--version <tag>|latest] [--
 
 Examples:
   install.sh
-  install.sh pulse-server-scale --version v0.1.0
+  install.sh pulse-server --version v0.1.0
+  install.sh pulse-server-scale --version v0.1.0   # compatibility alias
   install.sh pulse-server --cli-version v0.1.0
   install.sh pulse-server --install-dir /usr/local/bin
 EOF
@@ -24,8 +26,14 @@ EOF
 # Parse install target/options.
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    pulse-server|pulse-server-scale)
-      BINARY="$1"
+    pulse-server)
+      BINARY="pulse-server"
+      shift
+      ;;
+    pulse-server-scale)
+      echo "Argument 'pulse-server-scale' is deprecated. Installing 'pulse-server' and using env-driven scale mode."
+      BINARY="pulse-server"
+      REQUESTED_SCALE_MODE=1
       shift
       ;;
     pulse)
@@ -34,8 +42,9 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     pulse-scale)
-      echo "Argument 'pulse-scale' is deprecated. Installing 'pulse-server-scale' instead."
-      BINARY="pulse-server-scale"
+      echo "Argument 'pulse-scale' is deprecated. Installing 'pulse-server' and using env-driven scale mode."
+      BINARY="pulse-server"
+      REQUESTED_SCALE_MODE=1
       shift
       ;;
     --version)
@@ -129,15 +138,13 @@ fi
 BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
 CHECKSUM_URL="${BASE_URL}/checksums.txt"
 curl -fL "$CHECKSUM_URL" -o "${TMP_DIR}/checksums.txt"
-ASSET_CANDIDATES=("${BINARY}-${OS}-${ARCH}")
-case "$BINARY" in
-  pulse-server)
-    ASSET_CANDIDATES+=("pulse-${OS}-${ARCH}")
-    ;;
-  pulse-server-scale)
-    ASSET_CANDIDATES+=("pulse-scale-${OS}-${ARCH}")
-    ;;
-esac
+ASSET_CANDIDATES=("pulse-server-${OS}-${ARCH}")
+if [[ "$REQUESTED_SCALE_MODE" == "1" ]]; then
+  ASSET_CANDIDATES+=("pulse-server-scale-${OS}-${ARCH}")
+  ASSET_CANDIDATES+=("pulse-scale-${OS}-${ARCH}")
+else
+  ASSET_CANDIDATES+=("pulse-${OS}-${ARCH}")
+fi
 
 DOWNLOADED_ASSET=""
 for CANDIDATE in "${ASSET_CANDIDATES[@]}"; do
@@ -149,7 +156,7 @@ for CANDIDATE in "${ASSET_CANDIDATES[@]}"; do
 done
 
 if [[ -z "$DOWNLOADED_ASSET" ]]; then
-  echo "Could not download a release asset for ${BINARY} (${OS}/${ARCH}) at tag ${TAG}"
+  echo "Could not download a release asset for pulse-server (${OS}/${ARCH}) at tag ${TAG}"
   exit 1
 fi
 
@@ -173,6 +180,13 @@ mkdir -p "$INSTALL_DIR"
 install -m 0755 "${TMP_DIR}/${DOWNLOADED_ASSET}" "${INSTALL_DIR}/${BINARY}"
 
 echo "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY}"
+
+if [[ "$REQUESTED_SCALE_MODE" == "1" ]]; then
+  echo "Scale mode now uses the same binary. Start with:"
+  echo "  export PULSE_MODE=scale"
+  echo "  export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'"
+  echo "  pulse-server"
+fi
 
 # Optionally install the CLI so users have a ready-to-use local setup.
 if [[ "$INSTALL_CLI" == "1" ]]; then

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run pulse.ts",
     "dev:single": "bun run pulse.ts",
-    "dev:scale": "bun run pulse-scale.ts",
+    "dev:scale": "PULSE_MODE=scale bun run pulse.ts",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:migrate:scale": "bunx drizzle-kit push --config=drizzle.scale.config.ts",
@@ -16,7 +16,7 @@
     "db:reset": "bun run scripts/reset.ts",
     "db:snapshot": "bunx drizzle-kit generate",
     "build:pulse": "bun build ./pulse.ts --compile --outfile ./dist/pulse-server",
-    "build:pulse-scale": "bun build ./pulse-scale.ts --compile --outfile ./dist/pulse-server-scale",
+    "build:pulse-scale": "bun run build:pulse",
     "release:artifacts": "bun run scripts/release.ts",
     "test": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",

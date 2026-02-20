@@ -77,7 +77,7 @@ jobs:
           set -e
           bun run db:migrate:scale
           rm -rf .data/wal.test .data/wal-spans.test
-          bun run pulse-scale.ts > /tmp/trace-service-scale-test.log 2>&1 &
+          bun run pulse.ts > /tmp/trace-service-scale-test.log 2>&1 &
           PID=$!
           trap 'kill $PID 2>/dev/null || true; wait $PID 2>/dev/null || true' EXIT
           for i in $(seq 1 40); do
@@ -119,5 +119,4 @@ jobs:
           name: pulse-binaries
           path: |
             dist/pulse-server
-            dist/pulse-server-scale
             dist/checksums.txt

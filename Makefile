@@ -27,15 +27,15 @@ dev-listener:
 
 # Scale mode (Postgres + partitioned listeners)
 dev-scale:
-	PULSE_MODE=scale bun run pulse-scale.ts
+	PULSE_MODE=scale bun run pulse.ts
 
 # Scale mode API only (no listeners)
 dev-scale-api:
-	PULSE_MODE=scale PULSE_RUNTIME_MODE=api bun run pulse-scale.ts
+	PULSE_MODE=scale PULSE_RUNTIME_MODE=api bun run pulse.ts
 
 # Scale mode listeners only (no API)
 dev-scale-listener:
-	PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse-scale.ts
+	PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse.ts
 
 # Backward-compatible aliases for local scale Postgres helper
 up:
@@ -117,7 +117,7 @@ build:
 	bun run build:pulse
 
 build-scale:
-	bun run build:pulse-scale
+	bun run build:pulse
 
 release-artifacts:
 	bun run release:artifacts

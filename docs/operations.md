@@ -2,8 +2,8 @@
 
 ## Modes
 
-- `pulse-server` (single mode): local SQLite file (`~/.pulse/.data/pulse.db` by default), single-node.
-- `pulse-server-scale` (scale mode): Postgres plus partitioned WAL listeners.
+- `pulse-server` (default single mode): local SQLite file (`~/.pulse/.data/pulse.db` by default), single-node.
+- `pulse-server` with `PULSE_MODE=scale`: Postgres plus partitioned WAL listeners.
 
 ## Single Mode Runbook
 
@@ -13,9 +13,12 @@
 export PULSE_MODE=single
 export PULSE_RUNTIME_MODE=all
 export PORT=3000
-export BETTER_AUTH_SECRET='replace-with-32+char-secret'
+# 32+ chars for signing dashboard sessions/cookies
+export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+# Public URL clients use to reach this service
 export BETTER_AUTH_URL='http://localhost:3000'
-export ENCRYPTION_KEY='replace-with-32+char-secret'
+# 32+ chars for encrypting API keys at rest
+export ENCRYPTION_KEY="$(openssl rand -hex 32)"
 ```
 
 ### Start / Stop
@@ -46,16 +49,19 @@ export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
 export TRACE_WAL_PARTITIONS=4
 export SPAN_WAL_PARTITIONS=4
 export PORT=3000
-export BETTER_AUTH_SECRET='replace-with-32+char-secret'
+# 32+ chars for signing dashboard sessions/cookies
+export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+# Public URL clients use to reach this service
 export BETTER_AUTH_URL='http://localhost:3000'
-export ENCRYPTION_KEY='replace-with-32+char-secret'
+# 32+ chars for encrypting API keys at rest
+export ENCRYPTION_KEY="$(openssl rand -hex 32)"
 ```
 
 ### Start / Stop
 
 ```bash
 bun run db:migrate:scale
-bun run pulse-scale.ts
+PULSE_MODE=scale bun run pulse.ts
 ```
 
 Stop with `Ctrl+C`.
@@ -65,22 +71,22 @@ Stop with `Ctrl+C`.
 API-only process:
 
 ```bash
-PULSE_MODE=scale PULSE_RUNTIME_MODE=api bun run pulse-scale.ts
+PULSE_MODE=scale PULSE_RUNTIME_MODE=api bun run pulse.ts
 ```
 
 Listener-only process:
 
 ```bash
-PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse-scale.ts
+PULSE_MODE=scale PULSE_RUNTIME_MODE=listener bun run pulse.ts
 ```
 
 ### Build Binary
 
 ```bash
-bun run build:pulse-scale
+bun run build:pulse
 ```
 
-Binary output: `dist/pulse-server-scale`.
+Binary output: `dist/pulse-server`.
 
 ## Local Scale Testing
 
@@ -113,5 +119,4 @@ bun run release:artifacts
 Outputs:
 
 - `dist/pulse-server`
-- `dist/pulse-server-scale`
 - `dist/checksums.txt`

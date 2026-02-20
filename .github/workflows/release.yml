@@ -50,7 +50,6 @@ jobs:
         run: |
           mkdir -p dist
           bun build ./pulse.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-server-${{ matrix.os }}-${{ matrix.arch }}
-          bun build ./pulse-scale.ts --compile --target=${{ matrix.target }} --outfile ./dist/pulse-server-scale-${{ matrix.os }}-${{ matrix.arch }}
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
@@ -58,7 +57,6 @@ jobs:
           name: binaries-${{ matrix.os }}-${{ matrix.arch }}
           path: |
             dist/pulse-server-${{ matrix.os }}-${{ matrix.arch }}
-            dist/pulse-server-scale-${{ matrix.os }}-${{ matrix.arch }}
           if-no-files-found: error
 
   publish:
@@ -95,7 +93,5 @@ jobs:
           files: |
             dist/pulse-server-linux-*
             dist/pulse-server-darwin-*
-            dist/pulse-server-scale-linux-*
-            dist/pulse-server-scale-darwin-*
             dist/checksums.txt
           generate_release_notes: true
