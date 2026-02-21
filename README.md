@@ -190,6 +190,35 @@ export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
 pulse-server
 ```
 
+### 9. Docker Image (Server)
+
+Pull and run server image:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+  -e ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  -e BETTER_AUTH_URL='http://localhost:3000' \
+  ghcr.io/ek-labs-llc/pulse-server:<tag>
+```
+
+Scale mode with Postgres:
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e PULSE_MODE=scale \
+  -e DATABASE_URL='postgresql://pulse:pulse@host.docker.internal:5432/pulse' \
+  -e BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+  -e ENCRYPTION_KEY="$(openssl rand -hex 32)" \
+  -e BETTER_AUTH_URL='http://localhost:3000' \
+  ghcr.io/ek-labs-llc/pulse-server:<tag>
+```
+
+On tag push (`v*`), `.github/workflows/release-image.yml` publishes multi-arch images:
+
+- `ghcr.io/ek-labs-llc/pulse-server:vX.Y.Z`
+- `ghcr.io/ek-labs-llc/pulse-server:sha-...`
+
 ## Local Postgres Helper (Scale Mode)
 
 For scale-mode tests/dev, start only Postgres:
