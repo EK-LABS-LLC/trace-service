@@ -244,14 +244,14 @@ Create an API key in the dashboard (**API Keys** page), then initialize the SDK 
 ### 1) Install
 
 ```bash
-bun add @pulse/sdk openai
+bun add @eklabs/pulse-sdk openai
 ```
 
 ### 2) Initialize and wrap your client
 
 ```ts
 import OpenAI from "openai";
-import { initPulse, observe, Provider } from "@pulse/sdk";
+import { initPulse, observe, Provider } from "@eklabs/pulse-sdk";
 
 initPulse({
   apiKey: process.env.PULSE_API_KEY!,        // pulse_sk_...
@@ -286,7 +286,7 @@ await openai.chat.completions.create({
 
 ```ts
 import Anthropic from "@anthropic-ai/sdk";
-import { observe, Provider } from "@pulse/sdk";
+import { observe, Provider } from "@eklabs/pulse-sdk";
 
 const anthropic = observe(
   new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
