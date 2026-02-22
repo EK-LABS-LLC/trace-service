@@ -12,6 +12,7 @@ export interface RuntimeServices {
   authSchema: Record<string, any>;
   dbProvider: "sqlite" | "pg";
   dbDialect: "sqlite" | "postgres";
+  bootstrapDb: () => Promise<void>;
   closeDb: () => Promise<void>;
 }
 

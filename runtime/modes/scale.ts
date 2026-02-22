@@ -6,6 +6,7 @@ import * as authSchema from "../../db/auth-schema-scale";
 import { PostgresStorage } from "../../db/postgres";
 import { createAuth } from "../../auth/create-auth";
 import type { RuntimeServices } from "../services";
+import { bootstrapPostgresSchema } from "../db-bootstrap";
 
 export function createScaleRuntimeServices(): RuntimeServices {
   const sql = postgres(env.DATABASE_URL);
@@ -26,6 +27,9 @@ export function createScaleRuntimeServices(): RuntimeServices {
     authSchema,
     dbProvider: "pg",
     dbDialect: "postgres",
+    bootstrapDb: async () => {
+      await bootstrapPostgresSchema(sql);
+    },
     closeDb: async () => {
       await sql.end({ timeout: 5 });
     },

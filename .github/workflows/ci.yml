@@ -93,11 +93,229 @@ jobs:
           done
           bun test --env-file=.env.test
 
+  bootstrap-single-mode:
+    runs-on: ubuntu-latest
+    env:
+      BETTER_AUTH_SECRET: bootstrap-single-secret-abcdefghijklmnopqrstuvwxyz123456
+      ENCRYPTION_KEY: bootstrap-single-key-abcdefghijklmnopqrstuvwxyz1234567890
+      BETTER_AUTH_URL: http://localhost:3100
+      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
+      PORT: "3100"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.5"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Verify fresh-DB signup flow (no explicit migrate)
+        run: |
+          set -euo pipefail
+
+          TMP_ROOT="$(mktemp -d /tmp/pulse-bootstrap-single.XXXXXX)"
+          LOG_FILE="/tmp/pulse-bootstrap-single.log"
+          DATA_DIR="${TMP_ROOT}/.data"
+
+          export PULSE_HOME="${TMP_ROOT}"
+          export PULSE_DATA_DIR="${DATA_DIR}"
+          export DATABASE_PATH="${DATA_DIR}/pulse.db"
+          export WAL_DIR="${DATA_DIR}/wal"
+          export WAL_SPAN_DIR="${DATA_DIR}/wal-spans"
+
+          bun run pulse.ts >"${LOG_FILE}" 2>&1 &
+          PID=$!
+
+          cleanup() {
+            kill "${PID}" 2>/dev/null || true
+            wait "${PID}" 2>/dev/null || true
+            rm -rf "${TMP_ROOT}"
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 40); do
+            if curl -fsS "http://localhost:${PORT}/health" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.5
+            if [ "$i" -eq 40 ]; then
+              echo "Service failed to become healthy. Last logs:"
+              tail -n 200 "${LOG_FILE}" || true
+              exit 1
+            fi
+          done
+
+          EMAIL="bootstrap-single-$(date +%s)-${RANDOM}@pulse.test"
+          PASSWORD="BootstrapPass!123"
+          PROJECT_NAME="Bootstrap Single Project"
+
+          SIGNUP_STATUS="$(curl -sS -o /tmp/bootstrap-single-signup.body -w "%{http_code}" \
+            -X POST "http://localhost:${PORT}/dashboard/api/signup" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"Bootstrap User\",\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"projectName\":\"${PROJECT_NAME}\"}")"
+          if [ "${SIGNUP_STATUS}" != "201" ]; then
+            echo "Signup failed with status ${SIGNUP_STATUS}"
+            cat /tmp/bootstrap-single-signup.body || true
+            tail -n 200 "${LOG_FILE}" || true
+            exit 1
+          fi
+
+          SIGNIN_STATUS="$(curl -sS -D /tmp/bootstrap-single-signin.headers -o /tmp/bootstrap-single-signin.body -w "%{http_code}" \
+            -X POST "http://localhost:${PORT}/api/auth/sign-in/email" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}")"
+          if [ "${SIGNIN_STATUS}" != "200" ]; then
+            echo "Sign-in failed with status ${SIGNIN_STATUS}"
+            cat /tmp/bootstrap-single-signin.body || true
+            tail -n 200 "${LOG_FILE}" || true
+            exit 1
+          fi
+
+          SESSION_COOKIE="$(tr -d '\r' < /tmp/bootstrap-single-signin.headers | sed -n 's/^set-cookie:[[:space:]]*\(better-auth\.session_token=[^;]*\).*/\1/ip' | head -n1)"
+          if [ -z "${SESSION_COOKIE}" ]; then
+            echo "Expected Better Auth session cookie was not returned"
+            cat /tmp/bootstrap-single-signin.headers || true
+            exit 1
+          fi
+
+          PROJECTS_STATUS="$(curl -sS -o /tmp/bootstrap-single-projects.body -w "%{http_code}" \
+            -H "Cookie: ${SESSION_COOKIE}" \
+            "http://localhost:${PORT}/dashboard/api/projects")"
+          if [ "${PROJECTS_STATUS}" != "200" ]; then
+            echo "Listing projects failed with status ${PROJECTS_STATUS}"
+            cat /tmp/bootstrap-single-projects.body || true
+            tail -n 200 "${LOG_FILE}" || true
+            exit 1
+          fi
+
+          grep -q "\"projects\"" /tmp/bootstrap-single-projects.body
+
+  bootstrap-scale-mode:
+    runs-on: ubuntu-latest
+    env:
+      PULSE_MODE: scale
+      DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse
+      BETTER_AUTH_SECRET: bootstrap-scale-secret-abcdefghijklmnopqrstuvwxyz123456
+      ENCRYPTION_KEY: bootstrap-scale-key-abcdefghijklmnopqrstuvwxyz1234567890
+      BETTER_AUTH_URL: http://localhost:3200
+      FRONTEND_URL: http://localhost:5173
+      NODE_ENV: test
+      PORT: "3200"
+      WAL_DIR: .data/wal.scale.bootstrap
+      WAL_SPAN_DIR: .data/wal-spans.scale.bootstrap
+      TRACE_WAL_PARTITIONS: "1"
+      SPAN_WAL_PARTITIONS: "1"
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pulse -d pulse"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.5"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Verify fresh-DB signup flow in scale mode (no explicit migrate)
+        run: |
+          set -euo pipefail
+
+          LOG_FILE="/tmp/pulse-bootstrap-scale.log"
+          rm -rf "${WAL_DIR}" "${WAL_SPAN_DIR}"
+
+          bun run pulse.ts >"${LOG_FILE}" 2>&1 &
+          PID=$!
+
+          cleanup() {
+            kill "${PID}" 2>/dev/null || true
+            wait "${PID}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 40); do
+            if curl -fsS "http://localhost:${PORT}/health" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 0.5
+            if [ "$i" -eq 40 ]; then
+              echo "Scale service failed to become healthy. Last logs:"
+              tail -n 200 "${LOG_FILE}" || true
+              exit 1
+            fi
+          done
+
+          EMAIL="bootstrap-scale-$(date +%s)-${RANDOM}@pulse.test"
+          PASSWORD="BootstrapPass!123"
+          PROJECT_NAME="Bootstrap Scale Project"
+
+          SIGNUP_STATUS="$(curl -sS -o /tmp/bootstrap-scale-signup.body -w "%{http_code}" \
+            -X POST "http://localhost:${PORT}/dashboard/api/signup" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\":\"Bootstrap User\",\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\",\"projectName\":\"${PROJECT_NAME}\"}")"
+          if [ "${SIGNUP_STATUS}" != "201" ]; then
+            echo "Signup failed with status ${SIGNUP_STATUS}"
+            cat /tmp/bootstrap-scale-signup.body || true
+            tail -n 200 "${LOG_FILE}" || true
+            exit 1
+          fi
+
+          SIGNIN_STATUS="$(curl -sS -D /tmp/bootstrap-scale-signin.headers -o /tmp/bootstrap-scale-signin.body -w "%{http_code}" \
+            -X POST "http://localhost:${PORT}/api/auth/sign-in/email" \
+            -H "Content-Type: application/json" \
+            -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}")"
+          if [ "${SIGNIN_STATUS}" != "200" ]; then
+            echo "Sign-in failed with status ${SIGNIN_STATUS}"
+            cat /tmp/bootstrap-scale-signin.body || true
+            tail -n 200 "${LOG_FILE}" || true
+            exit 1
+          fi
+
+          SESSION_COOKIE="$(tr -d '\r' < /tmp/bootstrap-scale-signin.headers | sed -n 's/^set-cookie:[[:space:]]*\(better-auth\.session_token=[^;]*\).*/\1/ip' | head -n1)"
+          if [ -z "${SESSION_COOKIE}" ]; then
+            echo "Expected Better Auth session cookie was not returned"
+            cat /tmp/bootstrap-scale-signin.headers || true
+            exit 1
+          fi
+
+          PROJECTS_STATUS="$(curl -sS -o /tmp/bootstrap-scale-projects.body -w "%{http_code}" \
+            -H "Cookie: ${SESSION_COOKIE}" \
+            "http://localhost:${PORT}/dashboard/api/projects")"
+          if [ "${PROJECTS_STATUS}" != "200" ]; then
+            echo "Listing projects failed with status ${PROJECTS_STATUS}"
+            cat /tmp/bootstrap-scale-projects.body || true
+            tail -n 200 "${LOG_FILE}" || true
+            exit 1
+          fi
+
+          grep -q "\"projects\"" /tmp/bootstrap-scale-projects.body
+
   release-artifacts:
     runs-on: ubuntu-latest
     needs:
       - single-mode
       - scale-mode
+      - bootstrap-single-mode
+      - bootstrap-scale-mode
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -1,6 +1,7 @@
 import { env } from "./config";
 import { closeDb } from "./db";
 import { createApp } from "./app";
+import { getRuntimeServices } from "./runtime/services";
 import {
   startWAL,
   stopWAL,
@@ -118,6 +119,9 @@ async function stopWalIfStarted(
 }
 
 export async function startPulseServer(): Promise<void> {
+  const runtime = getRuntimeServices();
+  await runtime.bootstrapDb();
+
   const flags = getRuntimeFlags();
   const { server, traceWalStarted, spanWalStarted } = await startApiRuntime(
     flags,

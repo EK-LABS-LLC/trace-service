@@ -8,6 +8,7 @@ import * as authSchema from "../../db/auth-schema-single";
 import { SqliteStorage } from "../../db/sqlite";
 import { createAuth } from "../../auth/create-auth";
 import type { RuntimeServices } from "../services";
+import { bootstrapSqliteSchema } from "../db-bootstrap";
 
 export function createSingleRuntimeServices(): RuntimeServices {
   mkdirSync(dirname(env.DATABASE_PATH), { recursive: true });
@@ -34,6 +35,9 @@ export function createSingleRuntimeServices(): RuntimeServices {
     authSchema,
     dbProvider: "sqlite",
     dbDialect: "sqlite",
+    bootstrapDb: async () => {
+      bootstrapSqliteSchema(sqlite);
+    },
     closeDb: async () => {
       sqlite.close();
     },
