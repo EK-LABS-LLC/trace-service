@@ -22,6 +22,10 @@ import { handleGetAnalytics, handleGetSpanAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
+import {
+  handleConsumeLocalLoginToken,
+  handleCreateLocalLoginToken,
+} from "./routes/local-login";
 
 export function createApp(): Hono {
   const app = new Hono();
@@ -68,6 +72,8 @@ export function createApp(): Hono {
   });
 
   app.post("/dashboard/api/signup", handleSignupWithProject);
+  app.post("/dashboard/api/local-login-token", handleCreateLocalLoginToken);
+  app.get("/dashboard/api/local-login", handleConsumeLocalLoginToken);
   app.route("/dashboard/api", dashboard);
 
   app.post("/v1/auth/login", isAuthenticated);
@@ -87,4 +93,3 @@ export function createApp(): Hono {
 
   return app;
 }
-

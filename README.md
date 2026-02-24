@@ -148,8 +148,8 @@ Artifacts:
 Tag and push a version:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 This triggers `.github/workflows/release.yml`, which builds and publishes:
@@ -173,7 +173,7 @@ curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scri
 Install a specific tag:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server --version vX.Y.Z
 ```
 
 Install server only (skip CLI):
@@ -190,7 +190,21 @@ export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
 pulse-server
 ```
 
-### 9. Docker Image (Server)
+### 9. Uninstall (Server + CLI)
+
+Remove installed binaries from `~/.local/bin` and clean agent hooks:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/uninstall.sh | bash
+```
+
+Full cleanup (also removes `~/.pulse` config/data):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/uninstall.sh | bash -s -- --purge-data
+```
+
+### 10. Docker Image (Server)
 
 Pull and run server image:
 
