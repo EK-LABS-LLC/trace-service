@@ -4,10 +4,11 @@ set -euo pipefail
 INSTALL_DIR="${PULSE_INSTALL_DIR:-$HOME/.local/bin}"
 PURGE_DATA=0
 REMOVE_HOOKS=1
+PATH_SCAN=1
 
 usage() {
   cat <<'EOF'
-Usage: uninstall.sh [--install-dir <path>] [--purge-data] [--keep-hooks]
+Usage: uninstall.sh [--install-dir <path>] [--purge-data] [--keep-hooks] [--no-path-scan]
 
 Examples:
   uninstall.sh
@@ -16,6 +17,7 @@ Examples:
 
 Notes:
   - Removes pulse-server and pulse binaries from the selected install dir.
+  - Also removes binaries discovered on PATH (for example ~/.local/bin or ~/.cargo/bin).
   - Attempts to remove agent hooks with `pulse disconnect` before deleting the CLI binary.
   - `--purge-data` also removes ~/.pulse (config + local sqlite data).
 EOF
@@ -38,6 +40,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --keep-hooks)
       REMOVE_HOOKS=0
+      shift
+      ;;
+    --no-path-scan)
+      PATH_SCAN=0
       shift
       ;;
     -h|--help)
@@ -63,14 +69,50 @@ if [[ "$REMOVE_HOOKS" == "1" ]]; then
 fi
 
 # Remove installed binaries from the chosen install directory.
-for bin in pulse pulse-server; do
-  target="${INSTALL_DIR}/${bin}"
-  if [[ -f "$target" ]]; then
-    rm -f "$target"
-    echo "Removed ${target}"
-  else
-    echo "Not found: ${target}"
+add_candidate() {
+  local value="${1:-}"
+  [[ -n "$value" ]] || return
+  for existing in "${CANDIDATES[@]}"; do
+    [[ "$existing" == "$value" ]] && return
+  done
+  CANDIDATES+=("$value")
+}
+
+remove_binary_candidates() {
+  local bin="$1"
+  CANDIDATES=()
+  add_candidate "${INSTALL_DIR}/${bin}"
+  add_candidate "$(command -v "$bin" 2>/dev/null || true)"
+
+  if [[ "$PATH_SCAN" == "1" ]] && command -v which >/dev/null 2>&1; then
+    while IFS= read -r resolved; do
+      add_candidate "$resolved"
+    done < <(which -a "$bin" 2>/dev/null || true)
   fi
+
+  local removed=0
+  local seen_existing=0
+  for target in "${CANDIDATES[@]}"; do
+    if [[ -f "$target" ]]; then
+      seen_existing=1
+      if rm -f "$target"; then
+        echo "Removed ${target}"
+        removed=1
+      else
+        echo "Warning: failed to remove ${target}"
+      fi
+    fi
+  done
+
+  if [[ "$seen_existing" == "0" ]]; then
+    echo "Not found: ${bin} in ${INSTALL_DIR} or PATH"
+  elif [[ "$removed" == "0" ]]; then
+    echo "Warning: found ${bin}, but removal failed for all discovered paths."
+  fi
+}
+
+for bin in pulse pulse-server; do
+  remove_binary_candidates "$bin"
 done
 
 # Optionally remove persisted local config/data.

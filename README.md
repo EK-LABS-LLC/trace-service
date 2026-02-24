@@ -198,6 +198,8 @@ Remove installed binaries from `~/.local/bin` and clean agent hooks:
 curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/uninstall.sh | bash
 ```
 
+The uninstall script removes binaries from the selected install dir and from discovered `PATH` locations (for example `~/.local/bin`, `~/.cargo/bin`).
+
 Full cleanup (also removes `~/.pulse` config/data):
 
 ```bash
