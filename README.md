@@ -181,6 +181,8 @@ Install latest `pulse-server` and `pulse` CLI together:
 curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server
 ```
 
+Re-running the installer upgrades the binaries and dashboard assets in place and preserves `~/.pulse` data.
+
 Install a specific tag:
 
 ```bash
