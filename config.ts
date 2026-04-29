@@ -14,11 +14,12 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   ADMIN_KEY: z.string().optional(),
+  DASHBOARD_DIST_DIR: z.string().optional(),
   BETTER_AUTH_SECRET: z
     .string()
     .min(32, "BETTER_AUTH_SECRET must be at least 32 characters"),
   BETTER_AUTH_URL: z.string().default("http://localhost:3000"),
-  FRONTEND_URL: z.string().default("http://localhost:5173"),
+  FRONTEND_URL: z.string().optional(),
   ENCRYPTION_KEY: z
     .string()
     .min(32, "ENCRYPTION_KEY must be at least 32 characters"),
@@ -81,6 +82,8 @@ function parseEnv() {
     PULSE_HOME: dataPaths.pulseHome,
     PULSE_DATA_DIR: dataPaths.pulseDataDir,
     DATABASE_PATH: resolveOptionalPath(env.DATABASE_PATH) ?? dataPaths.databasePath,
+    DASHBOARD_DIST_DIR: resolveOptionalPath(env.DASHBOARD_DIST_DIR),
+    FRONTEND_URL: env.FRONTEND_URL ?? env.BETTER_AUTH_URL,
     WAL_DIR: walDir,
     WAL_SPAN_DIR: walSpanDir,
     WAL_DLQ_DIR: walDlqDir,

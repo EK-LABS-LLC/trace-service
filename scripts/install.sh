@@ -109,6 +109,9 @@ esac
 TMP_DIR="$(mktemp -d /tmp/pulse-install.XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+DASHBOARD_ARCHIVE="pulse-dashboard-assets.tar.gz"
+DASHBOARD_DIR="${INSTALL_DIR}/dashboard"
+
 # Resolve release tag + verify artifact integrity against checksums.
 fetch_tag() {
   local api_url="https://api.github.com/repos/${REPO}/releases/latest"
@@ -176,10 +179,34 @@ if [[ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]]; then
   exit 1
 fi
 
+DASHBOARD_URL="${BASE_URL}/${DASHBOARD_ARCHIVE}"
+if ! curl -fsL "$DASHBOARD_URL" -o "${TMP_DIR}/${DASHBOARD_ARCHIVE}"; then
+  echo "Could not download dashboard assets archive (${DASHBOARD_ARCHIVE}) at tag ${TAG}"
+  exit 1
+fi
+
+DASHBOARD_EXPECTED_HASH="$(awk -v name="${DASHBOARD_ARCHIVE}" '$2 == name {print $1}' "${TMP_DIR}/checksums.txt")"
+if [[ -z "$DASHBOARD_EXPECTED_HASH" ]]; then
+  echo "No checksum entry found for ${DASHBOARD_ARCHIVE}"
+  exit 1
+fi
+
+DASHBOARD_ACTUAL_HASH="$(sha256_file "${TMP_DIR}/${DASHBOARD_ARCHIVE}")"
+if [[ "$DASHBOARD_EXPECTED_HASH" != "$DASHBOARD_ACTUAL_HASH" ]]; then
+  echo "Checksum mismatch for ${DASHBOARD_ARCHIVE}"
+  echo "Expected: ${DASHBOARD_EXPECTED_HASH}"
+  echo "Actual:   ${DASHBOARD_ACTUAL_HASH}"
+  exit 1
+fi
+
 mkdir -p "$INSTALL_DIR"
 install -m 0755 "${TMP_DIR}/${DOWNLOADED_ASSET}" "${INSTALL_DIR}/${BINARY}"
+rm -rf "$DASHBOARD_DIR"
+mkdir -p "$DASHBOARD_DIR"
+tar -xzf "${TMP_DIR}/${DASHBOARD_ARCHIVE}" -C "$DASHBOARD_DIR" --strip-components=1
 
 echo "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY}"
+echo "Installed dashboard assets to ${DASHBOARD_DIR}"
 
 if [[ "$REQUESTED_SCALE_MODE" == "1" ]]; then
   echo "Scale mode now uses the same binary. Start with:"
