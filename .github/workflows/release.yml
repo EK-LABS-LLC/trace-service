@@ -95,11 +95,18 @@ jobs:
       - name: Checkout trace-service
         uses: actions/checkout@v4
 
-      - name: Download all binaries
+      - name: Download binaries
         uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: binaries-*
           merge-multiple: true
+
+      - name: Download dashboard assets
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-assets
+          path: dist/dashboard
 
       - name: Package dashboard assets
         run: |
