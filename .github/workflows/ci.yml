@@ -14,7 +14,7 @@ jobs:
       BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       BETTER_AUTH_URL: http://localhost:3000
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost:3000
       NODE_ENV: test
     steps:
       - name: Checkout
@@ -28,6 +28,9 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install
+
       - name: Run single mode e2e tests
         run: make test-e2e
 
@@ -37,7 +40,7 @@ jobs:
       BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       BETTER_AUTH_URL: http://localhost:3000
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost:3000
       NODE_ENV: test
     services:
       postgres:
@@ -64,6 +67,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install
 
       - name: Run scale mode e2e tests
         env:
@@ -99,7 +105,7 @@ jobs:
       BETTER_AUTH_SECRET: bootstrap-single-secret-abcdefghijklmnopqrstuvwxyz123456
       ENCRYPTION_KEY: bootstrap-single-key-abcdefghijklmnopqrstuvwxyz1234567890
       BETTER_AUTH_URL: http://localhost:3100
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost:3100
       NODE_ENV: test
       PORT: "3100"
     steps:
@@ -113,6 +119,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install
 
       - name: Verify fresh-DB signup flow (no explicit migrate)
         run: |
@@ -203,7 +212,7 @@ jobs:
       BETTER_AUTH_SECRET: bootstrap-scale-secret-abcdefghijklmnopqrstuvwxyz123456
       ENCRYPTION_KEY: bootstrap-scale-key-abcdefghijklmnopqrstuvwxyz1234567890
       BETTER_AUTH_URL: http://localhost:3200
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost:3200
       NODE_ENV: test
       PORT: "3200"
       WAL_DIR: .data/wal.scale.bootstrap
@@ -235,6 +244,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install
 
       - name: Verify fresh-DB signup flow in scale mode (no explicit migrate)
         run: |
@@ -327,6 +339,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install dashboard dependencies
+        run: cd dashboard && bun install
 
       - name: Build dual artifacts and checksums
         run: bun run release:artifacts

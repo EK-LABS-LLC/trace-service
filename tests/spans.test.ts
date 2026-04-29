@@ -67,6 +67,47 @@ describe("Spans Endpoints", () => {
     });
   });
 
+  test("POST /v1/spans/batch accepts llm_response spans", async () => {
+    const llmResponseSpanId = crypto.randomUUID();
+    const payload = [
+      {
+        span_id: llmResponseSpanId,
+        session_id: sessionId,
+        timestamp: new Date().toISOString(),
+        source: "claude_code",
+        kind: "llm_response",
+        event_type: "assistant_message",
+        status: "success",
+        metadata: {
+          content: "Here is the answer.",
+          usage: { input_tokens: 12, output_tokens: 34 },
+        },
+      },
+    ];
+
+    const ingestResponse = await authFetch("/v1/spans/batch", testProject.apiKey, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    expect(ingestResponse.status).toBe(202);
+
+    const response = await authFetch(
+      `/v1/spans/${llmResponseSpanId}`,
+      testProject.apiKey,
+    );
+    const data = (await response.json()) as {
+      spanId: string;
+      kind: string;
+      eventType: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(data.spanId).toBe(llmResponseSpanId);
+    expect(data.kind).toBe("llm_response");
+    expect(data.eventType).toBe("assistant_message");
+  });
+
   test("GET /v1/spans/:id returns single span", async () => {
     const firstSpanId = spanIds[0]!;
     const response = await authFetch(

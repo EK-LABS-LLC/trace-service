@@ -1,8 +1,9 @@
 # Pulse Trace Service
 
-Backend + dashboard for LLM observability.
+Backend + integrated dashboard for LLM observability.
 
 - Ingest traces with API keys (`/v1/*`)
+- Serve the Pulse dashboard UI from the same origin (`/`)
 - Manage projects and API keys via authenticated dashboard user sessions (`/dashboard/api/*`)
 - Better Auth handles account/session endpoints (`/api/auth/*`)
 
@@ -20,7 +21,7 @@ Use these from servers, workers, apps, and scripts:
 Auth: `Authorization: Bearer <pulse_sk_...>`
 
 ### Control plane (Dashboard/user session)
-Use these from the dashboard UI:
+Use these from the dashboard UI served by the trace service root (`/`):
 
 - `POST /dashboard/api/signup` (public account + first project bootstrap)
 - `GET /dashboard/api/projects`
@@ -51,7 +52,7 @@ Required:
 - `PORT` (default `3000`)
 - `BETTER_AUTH_SECRET` (minimum 32 chars, signs dashboard auth sessions/cookies)
 - `ENCRYPTION_KEY` (minimum 32 chars, encrypts stored API keys at rest)
-- `BETTER_AUTH_URL` (public base URL used by auth/session flows, e.g. `http://localhost:3000`)
+- `BETTER_AUTH_URL` (public base URL used by auth/session flows and same-origin dashboard, e.g. `http://localhost:3000`)
 
 Optional:
 
@@ -63,6 +64,8 @@ Optional:
 - `DATABASE_URL` (required for `scale`, e.g. `postgresql://pulse:pulse@localhost:5432/pulse`)
 - `NODE_ENV` (`development` | `test` | `production`)
 - `ADMIN_KEY` (legacy/internal use)
+- `FRONTEND_URL` (optional override for a separate dashboard origin during frontend development)
+- `DASHBOARD_DIST_DIR` (optional path to built dashboard assets if not using the default discovery paths)
 - `TRACE_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
 - `SPAN_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
 
@@ -133,6 +136,12 @@ Service health:
 curl http://localhost:3000/health
 ```
 
+Dashboard UI:
+
+```bash
+open http://localhost:3000/
+```
+
 ### 6. Build Executables
 
 ```bash
@@ -142,6 +151,8 @@ bun run build:pulse
 Artifacts:
 
 - `dist/pulse-server` (single or scale mode via `PULSE_MODE`)
+- `dist/dashboard/*` (bundled dashboard assets served by `pulse-server`)
+- `dist/pulse-dashboard-assets.tar.gz` (release archive installed alongside `pulse-server`)
 
 ### 7. Publish Release Artifacts
 
@@ -170,6 +181,8 @@ Install latest `pulse-server` and `pulse` CLI together:
 curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scripts/install.sh | bash -s -- pulse-server
 ```
 
+Re-running the installer upgrades the binaries and dashboard assets in place and preserves `~/.pulse` data.
+
 Install a specific tag:
 
 ```bash
@@ -189,6 +202,10 @@ export PULSE_MODE=scale
 export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
 pulse-server
 ```
+
+The install script also places built dashboard assets in a sibling `dashboard/`
+directory next to the installed `pulse-server` binary so the server can serve
+the UI without extra configuration.
 
 ### 9. Uninstall (Server + CLI)
 

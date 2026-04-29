@@ -91,6 +91,7 @@ export const spanSourceSchema = z.enum([
  * agent_run       - a subagent started and completed a task
  * session         - session lifecycle event (start, end, stop, resume)
  * user_prompt     - user submitted a prompt to the agent
+ * llm_response    - assistant/model emitted a response message
  * notification    - agent emitted a notification
  */
 export const spanKindSchema = z.enum([
@@ -98,6 +99,7 @@ export const spanKindSchema = z.enum([
   "agent_run",
   "session",
   "user_prompt",
+  "llm_response",
   "notification",
 ]);
 

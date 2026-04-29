@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 const DIST_DIR = "dist";
-const ARTIFACTS = ["pulse-server"] as const;
+const DASHBOARD_ARCHIVE = "pulse-dashboard-assets.tar.gz";
+const ARTIFACTS = ["pulse-server", DASHBOARD_ARCHIVE] as const;
 
 function run(command: string[]): void {
   const proc = Bun.spawnSync({
@@ -23,6 +24,7 @@ function sha256(path: string): string {
 }
 
 run(["bun", "run", "build:pulse"]);
+run(["tar", "-czf", join(DIST_DIR, DASHBOARD_ARCHIVE), "-C", DIST_DIR, "dashboard"]);
 
 const lines: string[] = [];
 for (const artifact of ARTIFACTS) {

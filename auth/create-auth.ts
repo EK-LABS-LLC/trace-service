@@ -12,6 +12,10 @@ export function createAuth(
   provider: DrizzleProvider,
   authSchema: DrizzleAuthSchema,
 ) {
+  const trustedOrigins = Array.from(
+    new Set([env.BETTER_AUTH_URL, env.FRONTEND_URL].filter(Boolean)),
+  );
+
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
@@ -22,6 +26,6 @@ export function createAuth(
     emailAndPassword: {
       enabled: true,
     },
-    trustedOrigins: [env.FRONTEND_URL],
+    trustedOrigins,
   });
 }

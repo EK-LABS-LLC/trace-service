@@ -7,6 +7,7 @@
     "dev": "bun run pulse.ts",
     "dev:single": "bun run pulse.ts",
     "dev:scale": "PULSE_MODE=scale bun run pulse.ts",
+    "build:dashboard-assets": "rm -rf dist/dashboard && mkdir -p dist/dashboard && cd dashboard && bun run build && cp -R dist/. ../dist/dashboard/",
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:migrate:scale": "bunx drizzle-kit push --config=drizzle.scale.config.ts",
@@ -15,7 +16,7 @@
     "db:seed": "bun run scripts/seed.ts",
     "db:reset": "bun run scripts/reset.ts",
     "db:snapshot": "bunx drizzle-kit generate",
-    "build:pulse": "bun build ./pulse.ts --compile --outfile ./dist/pulse-server",
+    "build:pulse": "bun run build:dashboard-assets && bun build ./pulse.ts --compile --outfile ./dist/pulse-server",
     "build:pulse-scale": "bun run build:pulse",
     "release:artifacts": "bun run scripts/release.ts",
     "test": "bun test --env-file=.env.test",
@@ -32,6 +33,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@types/node": "^25.6.0",
     "better-auth": "^1.4.18",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.5",

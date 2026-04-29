@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { env } from "./config";
+import { serveDashboard } from "./dashboard-static";
 import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/errors";
 import { logger } from "./middleware/logger";
@@ -27,8 +28,15 @@ import {
   handleCreateLocalLoginToken,
 } from "./routes/local-login";
 
+function allowedOrigins(): string[] {
+  return Array.from(
+    new Set([env.BETTER_AUTH_URL, env.FRONTEND_URL].filter(Boolean)),
+  );
+}
+
 export function createApp(): Hono {
   const app = new Hono();
+  const origins = allowedOrigins();
 
   app.onError(errorHandler);
   app.use("*", logger);
@@ -40,7 +48,7 @@ export function createApp(): Hono {
   app.use(
     "/api/auth/*",
     cors({
-      origin: "http://localhost:5173",
+      origin: origins,
       allowHeaders: ["Content-Type", "Authorization"],
       allowMethods: ["POST", "GET", "OPTIONS"],
       exposeHeaders: ["Content-Length"],
@@ -52,7 +60,7 @@ export function createApp(): Hono {
   app.use(
     "/dashboard/api/*",
     cors({
-      origin: env.FRONTEND_URL,
+      origin: origins,
       allowHeaders: ["Content-Type", "Authorization", "X-Project-Id"],
       allowMethods: ["POST", "GET", "DELETE", "OPTIONS"],
       credentials: true,
@@ -90,6 +98,7 @@ export function createApp(): Hono {
   app.get("/v1/sessions/:id/spans", authMiddleware, handleGetSessionSpans);
   app.get("/v1/analytics", authMiddleware, handleGetAnalytics);
   app.get("/v1/analytics/spans", authMiddleware, handleGetSpanAnalytics);
+  app.get("*", serveDashboard);
 
   return app;
 }

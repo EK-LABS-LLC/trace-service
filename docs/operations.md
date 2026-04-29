@@ -119,4 +119,6 @@ bun run release:artifacts
 Outputs:
 
 - `dist/pulse-server`
+- `dist/dashboard/*`
+- `dist/pulse-dashboard-assets.tar.gz`
 - `dist/checksums.txt`
