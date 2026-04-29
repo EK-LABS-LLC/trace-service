@@ -115,6 +115,14 @@ for bin in pulse pulse-server; do
   remove_binary_candidates "$bin"
 done
 
+DASHBOARD_DIR="${INSTALL_DIR}/dashboard"
+if [[ -d "$DASHBOARD_DIR" ]]; then
+  rm -rf "$DASHBOARD_DIR"
+  echo "Removed ${DASHBOARD_DIR}"
+else
+  echo "Not found: ${DASHBOARD_DIR}"
+fi
+
 # Optionally remove persisted local config/data.
 if [[ "$PURGE_DATA" == "1" ]]; then
   if [[ -d "$HOME/.pulse" ]]; then
