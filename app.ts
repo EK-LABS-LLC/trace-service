@@ -29,9 +29,10 @@ import {
 } from "./routes/local-login";
 
 function allowedOrigins(): string[] {
-  return Array.from(
-    new Set([env.BETTER_AUTH_URL, env.FRONTEND_URL].filter(Boolean)),
-  );
+  // Allow all origins for self-hosted deployments
+  // Users can access their own server from any IP/domain
+  // Security is user-controlled since they own the infrastructure
+  return ["*"];
 }
 
 export function createApp(): Hono {
