@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Make Auth Simpler - Final Local Smoke And Docs
+
+Date: 2026-06-23 15:44:20 CDT; Status: Completed; PR: #7 https://github.com/EK-LABS-LLC/trace-service/pull/7
+Task: Verify final local auth flow and align installed-binary docs.
+Message: Fresh `pulse up` bootstrap, local dashboard login, API trace/span ingest, and SDK connectivity were smoke-tested against local trace-service.
+Added/Changed: README now documents `pulse up` then `pulse dashboard` after installing server+CLI binaries.
+Fixed/Removed: No service behavior changed; documentation now matches the simplified local auth flow.
+Handoff: Paired CLI PR #4; local smoke used isolated HOME with config containing no `local_email` or `local_password`.
+
 ### Make Auth Simpler - API-Key Local Dashboard Login
 
 Date: 2026-06-23 15:28:20 CDT; Status: Completed; PR: #7 https://github.com/EK-LABS-LLC/trace-service/pull/7
