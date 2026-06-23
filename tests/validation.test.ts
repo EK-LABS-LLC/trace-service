@@ -361,6 +361,12 @@ describe("batchTraceSchema", () => {
 });
 
 describe("spanSchema", () => {
+  it("accepts Codex as a span source", () => {
+    const result = spanSchema.parse(createValidSpan({ source: "codex" }));
+
+    expect(result.source).toBe("codex");
+  });
+
   it("parses an llm_response span", () => {
     const span = createValidSpan({
       kind: "llm_response",

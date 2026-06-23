@@ -68,7 +68,7 @@ export interface Session {
   spans?: Span[];
 }
 
-export type SpanSource = "claude_code" | "opencode" | "openclaw";
+export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw";
 
 export type SpanKind =
   | "tool_use"
