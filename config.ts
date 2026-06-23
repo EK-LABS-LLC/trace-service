@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { z } from "zod";
 import { resolveDataPaths, resolveOptionalPath } from "./lib/data-paths";
+import { resolveLocalSecrets } from "./lib/local-secrets";
 
 const envSchema = z.object({
   PULSE_MODE: z.enum(["single", "scale"]).default("single"),
@@ -42,7 +43,17 @@ const envSchema = z.object({
 });
 
 function parseEnv() {
-  const result = envSchema.safeParse(process.env);
+  const dataPaths = resolveDataPaths(process.env);
+  const localSecrets = resolveLocalSecrets(process.env, dataPaths.pulseHome);
+  const envInput = { ...process.env, ...localSecrets };
+
+  for (const [key, value] of Object.entries(localSecrets)) {
+    if (value) {
+      process.env[key] = value;
+    }
+  }
+
+  const result = envSchema.safeParse(envInput);
   if (!result.success) {
     console.error("Invalid environment configuration:");
     result.error.issues.forEach((err) => {
@@ -52,7 +63,6 @@ function parseEnv() {
   }
 
   const env = result.data;
-  const dataPaths = resolveDataPaths(process.env);
   const walDir = resolveOptionalPath(env.WAL_DIR) ?? dataPaths.walDir;
   const walSpanDir = resolveOptionalPath(env.WAL_SPAN_DIR) ?? dataPaths.walSpanDir;
   const walDlqDir =

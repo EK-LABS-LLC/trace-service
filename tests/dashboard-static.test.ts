@@ -58,13 +58,20 @@ async function loadApp() {
     "utf8",
   );
 
-  const [{ initializeRuntimeServices }, { createSingleRuntimeServices }] =
+  const [
+    { initializeRuntimeServices, isRuntimeServicesInitialized },
+    { createSingleRuntimeServices },
+  ] =
     await Promise.all([
       import("../runtime/services"),
       import("../runtime/modes/single"),
     ]);
 
-  initializeRuntimeServices(createSingleRuntimeServices());
+  if (!isRuntimeServicesInitialized()) {
+    const runtime = createSingleRuntimeServices();
+    initializeRuntimeServices(runtime);
+    await runtime.bootstrapDb();
+  }
 
   const { createApp } = await import("../app");
   return createApp();
