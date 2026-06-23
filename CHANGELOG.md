@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Make Auth Simpler - Operations Docs Sweep
+
+Date: 2026-06-23 16:04:38 CDT; Status: Completed; PR: #7 https://github.com/EK-LABS-LLC/trace-service/pull/7
+Task: Reflect simplified local auth flow in service operations docs.
+Message: Operations docs now point local managed installs to `pulse up` then `pulse dashboard`.
+Added/Changed: `docs/operations.md` notes first-run bootstrap and confirms config stores API URL/key/project/server command, not dashboard credentials.
+Fixed/Removed: Removed stale expectation that local users manage dashboard email/password in setup docs.
+Handoff: Pair with CLI PR #4 and pulse-docs branch `docs/make-auth-simpler-local-flow`.
+
 ### Make Auth Simpler - Final Local Smoke And Docs
 
 Date: 2026-06-23 15:44:20 CDT; Status: Completed; PR: #7 https://github.com/EK-LABS-LLC/trace-service/pull/7
