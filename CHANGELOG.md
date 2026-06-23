@@ -4,7 +4,7 @@
 
 ### Codex Span Source Support
 
-Date: 2026-06-23 17:45 CDT; Status: Completed; PR: TBD
+Date: 2026-06-23 17:45 CDT; Status: Completed; PR: #9 https://github.com/EK-LABS-LLC/trace-service/pull/9
 Task: Accept spans emitted by the new Codex CLI hook integration.
 Message: Service validation and dashboard types now include `codex` as an agent span source.
 Added/Changed: Added validation coverage so Codex spans can be ingested and shown with other agent sessions.
