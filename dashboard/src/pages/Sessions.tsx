@@ -1,30 +1,17 @@
 import { useState } from "react";
-import type { Trace, Span } from "../lib/apiClient";
+import type { Trace } from "../lib/apiClient";
 import SessionsTable from "../components/sessions/SessionsTable";
 import AgentSessionsTable from "../components/sessions/AgentSessionsTable";
 import type { SessionSummary } from "../components/sessions/SessionsTable";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
 import { useTracesQuery, useSpansQuery } from "../api";
 import { useProject } from "../hooks/useProject";
+import { groupSpansIntoAgentSessions } from "../lib/agentSessions";
 
 type ViewTab = "llm" | "agents";
 
-interface AgentSessionSummary {
-  sessionId: string;
-  timestamp: string;
-  status: "success" | "error";
-  durationMs: number;
-  agentRuns: number;
-  toolCalls: number;
-}
-
 const CalendarIcon = () => (
-  <svg
-    className="w-4 h-4 text-neutral-500"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
+  <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -35,12 +22,7 @@ const CalendarIcon = () => (
 );
 
 const SearchIcon = () => (
-  <svg
-    className="w-4 h-4 text-neutral-500"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
+  <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -57,12 +39,7 @@ const ChevronDownIcon = () => (
     stroke="currentColor"
     viewBox="0 0 24 24"
   >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth={2}
-      d="M19 9l-7 7-7-7"
-    />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
   </svg>
 );
 
@@ -79,12 +56,11 @@ function groupTracesIntoSessions(traces: Trace[]): SessionSummary[] {
   const sessions: SessionSummary[] = [];
   for (const [session_id, sessionTraces] of sessionMap) {
     const sorted = sessionTraces.sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
     );
     const totalTokens = sorted.reduce(
       (sum, t) => sum + (t.inputTokens || 0) + (t.outputTokens || 0),
-      0,
+      0
     );
     const totalCost = sorted.reduce((sum, t) => sum + (t.costCents || 0), 0);
     const errorCount = sorted.filter((t) => t.status === "error").length;
@@ -106,52 +82,7 @@ function groupTracesIntoSessions(traces: Trace[]): SessionSummary[] {
   }
 
   return sessions.sort(
-    (a, b) =>
-      new Date(b.first_trace_time).getTime() -
-      new Date(a.first_trace_time).getTime(),
-  );
-}
-
-function groupSpansIntoSessions(spans: Span[]): AgentSessionSummary[] {
-  const sessionMap = new Map<string, Span[]>();
-
-  for (const span of spans) {
-    if (!span.sessionId) continue;
-    const existing = sessionMap.get(span.sessionId) || [];
-    existing.push(span);
-    sessionMap.set(span.sessionId, existing);
-  }
-
-  const sessions: AgentSessionSummary[] = [];
-  for (const [sessionId, sessionSpans] of sessionMap) {
-    const sorted = sessionSpans.sort(
-      (a, b) =>
-        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-    );
-
-    const agentRuns = sorted.filter((s) => s.kind === "agent_run").length;
-    const toolCalls = sorted.filter((s) => s.kind === "tool_use").length;
-    const errorCount = sorted.filter((s) => s.status === "error").length;
-
-    // Get duration from session span or calculate from first/last
-    const sessionSpan = sorted.find((s) => s.kind === "session");
-    const durationMs = sessionSpan?.durationMs ?? 0;
-
-    const first = sorted[0];
-    if (!first) continue;
-
-    sessions.push({
-      sessionId,
-      timestamp: first.timestamp,
-      status: errorCount > 0 ? "error" : "success",
-      durationMs,
-      agentRuns,
-      toolCalls,
-    });
-  }
-
-  return sessions.sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    (a, b) => new Date(b.first_trace_time).getTime() - new Date(a.first_trace_time).getTime()
   );
 }
 
@@ -161,45 +92,45 @@ export default function Sessions() {
   const [searchQuery, setSearchQuery] = useState("");
 
   // LLM sessions (from traces)
-  const sessionsQuery = useTracesQuery(
-    "sessions-source-traces",
-    selectedProject?.id,
-    {
-      limit: 500,
-    },
-  );
+  const sessionsQuery = useTracesQuery("sessions-source-traces", selectedProject?.id, {
+    limit: 500,
+  });
 
   // Agent sessions (from spans)
-  const spansQuery = useSpansQuery(
-    "sessions-source-spans",
-    selectedProject?.id,
-    {
-      limit: 500,
-    },
-  );
+  const spansQuery = useSpansQuery("sessions-source-spans", selectedProject?.id, {
+    limit: 500,
+  });
 
   const llmSessions = groupTracesIntoSessions(sessionsQuery.data?.traces ?? []);
-  const agentSessions = groupSpansIntoSessions(spansQuery.data?.spans ?? []);
+  const agentSessions = groupSpansIntoAgentSessions(spansQuery.data?.spans ?? []);
 
   const llmLoading = sessionsQuery.isPending;
   const agentLoading = spansQuery.isPending;
-  const llmError =
-    sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
-  const agentError =
-    spansQuery.error instanceof Error ? spansQuery.error.message : null;
+  const llmError = sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
+  const agentError = spansQuery.error instanceof Error ? spansQuery.error.message : null;
 
   const filteredLlmSessions = searchQuery
     ? llmSessions.filter(
         (s) =>
           s.session_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (s.user && s.user.toLowerCase().includes(searchQuery.toLowerCase())),
+          (s.user && s.user.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : llmSessions;
 
   const filteredAgentSessions = searchQuery
-    ? agentSessions.filter((s) =>
-        s.sessionId.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
+    ? agentSessions.filter((s) => {
+        const query = searchQuery.toLowerCase();
+        return [
+          s.displayName,
+          s.subtitle,
+          s.sessionId,
+          s.shortId,
+          s.sourceLabel,
+          s.cwd,
+          s.model,
+          s.firstPrompt,
+        ].some((value) => value?.toLowerCase().includes(query));
+      })
     : agentSessions;
 
   const total = activeTab === "llm" ? llmSessions.length : agentSessions.length;
@@ -233,9 +164,7 @@ export default function Sessions() {
               Agents
             </button>
           </div>
-          <span className="text-xs text-neutral-500">
-            {total.toLocaleString()} total
-          </span>
+          <span className="text-xs text-neutral-500">{total.toLocaleString()} total</span>
         </div>
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-neutral-300 rounded border border-neutral-700 hover:bg-neutral-850 hover:border-neutral-600 transition-colors">
@@ -260,7 +189,11 @@ export default function Sessions() {
               <SearchIcon />
               <input
                 type="text"
-                placeholder="Search by session ID or user..."
+                placeholder={
+                  activeTab === "agents"
+                    ? "Search by name, folder, model, or session ID..."
+                    : "Search by session ID or user..."
+                }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent text-sm text-neutral-300 placeholder:text-neutral-500 outline-none"
@@ -268,12 +201,7 @@ export default function Sessions() {
             </div>
           </div>
           <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-400 rounded border border-neutral-700 hover:bg-neutral-850 hover:border-neutral-600 transition-colors">
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -346,12 +274,9 @@ export default function Sessions() {
                       />
                     </svg>
                   </div>
-                  <h3 className="text-sm font-medium text-neutral-300 mb-2">
-                    No Agent Sessions
-                  </h3>
+                  <h3 className="text-sm font-medium text-neutral-300 mb-2">No Agent Sessions</h3>
                   <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                    Agent sessions with span data will appear here when
-                    available.
+                    Agent sessions with span data will appear here when available.
                   </p>
                 </div>
               </div>
