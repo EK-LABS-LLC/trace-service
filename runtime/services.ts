@@ -25,6 +25,10 @@ export function initializeRuntimeServices(services: RuntimeServices): void {
   runtimeServices = services;
 }
 
+export function isRuntimeServicesInitialized(): boolean {
+  return runtimeServices !== null;
+}
+
 export function getRuntimeServices(): RuntimeServices {
   if (!runtimeServices) {
     throw new Error(
