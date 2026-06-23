@@ -1,11 +1,29 @@
 import { splitSetCookieHeader } from "better-auth/cookies";
+import { serializeSignedCookie } from "better-call";
+import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
+import { hashApiKey } from "../auth/queries";
+import { env } from "../config";
+import { db } from "../db";
+import { authSession, user } from "../db/auth-schema";
+import { apiKeys, userProjects } from "../db/schema";
 
 const LOCAL_LOGIN_TOKEN_TTL_MS = 2 * 60 * 1000;
+const LOCAL_DASHBOARD_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-interface LocalLoginTokenRecord {
+type LocalLoginTokenRecord = LocalLoginPasswordTokenRecord | LocalLoginApiKeyTokenRecord;
+
+interface LocalLoginPasswordTokenRecord {
+  kind: "password";
   email: string;
   password: string;
+  redirectUrl: string;
+  expiresAt: number;
+}
+
+interface LocalLoginApiKeyTokenRecord {
+  kind: "api-key";
+  userId: string;
   redirectUrl: string;
   expiresAt: number;
 }
@@ -13,6 +31,8 @@ interface LocalLoginTokenRecord {
 interface LocalLoginTokenRequest {
   email?: string;
   password?: string;
+  api_key?: string;
+  project_id?: string;
   redirect_url?: string;
 }
 
@@ -32,11 +52,13 @@ export async function handleCreateLocalLoginToken(c: Context): Promise<Response>
   }
 
   const email = body.email?.trim().toLowerCase();
-  const password = body.password;
+  const password = body.password?.trim();
+  const apiKey = body.api_key?.trim();
+  const projectId = body.project_id?.trim();
   const redirectUrl = body.redirect_url?.trim();
 
-  if (!email || !password || !redirectUrl) {
-    return c.json({ error: "Missing required fields: email, password, redirect_url" }, 400);
+  if (!redirectUrl) {
+    return c.json({ error: "Missing required field: redirect_url" }, 400);
   }
 
   const redirect = safeParseUrl(redirectUrl);
@@ -49,12 +71,29 @@ export async function handleCreateLocalLoginToken(c: Context): Promise<Response>
   const token = crypto.randomUUID().replaceAll("-", "");
   const expiresAt = Date.now() + LOCAL_LOGIN_TOKEN_TTL_MS;
 
-  localLoginTokens.set(token, {
-    email,
-    password,
-    redirectUrl: redirect.toString(),
-    expiresAt,
-  });
+  if (apiKey) {
+    const userId = await findAdminUserIdForApiKey(apiKey, projectId);
+    if (!userId) {
+      return c.json({ error: "Invalid local API key or project" }, 401);
+    }
+
+    localLoginTokens.set(token, {
+      kind: "api-key",
+      userId,
+      redirectUrl: redirect.toString(),
+      expiresAt,
+    });
+  } else if (email && password) {
+    localLoginTokens.set(token, {
+      kind: "password",
+      email,
+      password,
+      redirectUrl: redirect.toString(),
+      expiresAt,
+    });
+  } else {
+    return c.json({ error: "Missing required fields: api_key or email/password" }, 400);
+  }
 
   const loginUrl = new URL("/dashboard/api/local-login", requestUrl);
   loginUrl.searchParams.set("token", token);
@@ -64,7 +103,7 @@ export async function handleCreateLocalLoginToken(c: Context): Promise<Response>
       login_url: loginUrl.toString(),
       expires_at: new Date(expiresAt).toISOString(),
     },
-    201,
+    201
   );
 }
 
@@ -86,6 +125,20 @@ export async function handleConsumeLocalLoginToken(c: Context): Promise<Response
     return c.json({ error: "Token is invalid or expired" }, 400);
   }
 
+  if (record.kind === "api-key") {
+    const sessionCookie = await createLocalSessionCookie(
+      record.userId,
+      c.req.header("user-agent") ?? null
+    );
+    if (!sessionCookie) {
+      return c.json({ error: "Local dashboard session could not be created" }, 500);
+    }
+
+    c.header("Set-Cookie", sessionCookie);
+    c.header("Cache-Control", "no-store");
+    return c.redirect(record.redirectUrl, 302);
+  }
+
   const signInUrl = new URL("/api/auth/sign-in/email", requestUrl);
   const signInResponse = await fetch(signInUrl, {
     method: "POST",
@@ -105,7 +158,7 @@ export async function handleConsumeLocalLoginToken(c: Context): Promise<Response
       {
         error: `Local sign-in failed (${signInResponse.status}): ${compactBody(body)}`,
       },
-      401,
+      401
     );
   }
 
@@ -115,7 +168,7 @@ export async function handleConsumeLocalLoginToken(c: Context): Promise<Response
       {
         error: "Sign-in succeeded but no session cookie was returned",
       },
-      500,
+      500
     );
   }
 
@@ -125,6 +178,61 @@ export async function handleConsumeLocalLoginToken(c: Context): Promise<Response
   c.header("Cache-Control", "no-store");
 
   return c.redirect(record.redirectUrl, 302);
+}
+
+async function findAdminUserIdForApiKey(
+  apiKey: string,
+  requestedProjectId?: string
+): Promise<string | null> {
+  const keyHash = hashApiKey(apiKey);
+  const [apiKeyRow] = await db
+    .select({ projectId: apiKeys.projectId })
+    .from(apiKeys)
+    .where(eq(apiKeys.keyHash, keyHash))
+    .limit(1);
+
+  const projectId = apiKeyRow?.projectId;
+  if (!projectId || (requestedProjectId && requestedProjectId !== projectId)) {
+    return null;
+  }
+
+  const [adminUser] = await db
+    .select({ userId: userProjects.userId })
+    .from(userProjects)
+    .innerJoin(user, eq(userProjects.userId, user.id))
+    .where(and(eq(userProjects.projectId, projectId), eq(userProjects.role, "admin")))
+    .limit(1);
+
+  return adminUser?.userId ?? null;
+}
+
+async function createLocalSessionCookie(
+  userId: string,
+  userAgent: string | null
+): Promise<string | null> {
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + LOCAL_DASHBOARD_SESSION_TTL_MS);
+  const token = crypto.randomUUID().replaceAll("-", "");
+  const sessionId = crypto.randomUUID();
+
+  await db.insert(authSession).values({
+    id: sessionId,
+    userId,
+    token,
+    expiresAt,
+    ipAddress: "127.0.0.1",
+    userAgent: userAgent ?? "",
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return serializeSignedCookie("better-auth.session_token", token, env.BETTER_AUTH_SECRET, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: false,
+    maxAge: LOCAL_DASHBOARD_SESSION_TTL_MS / 1000,
+  });
 }
 
 function consumeToken(token: string): LocalLoginTokenRecord | null {

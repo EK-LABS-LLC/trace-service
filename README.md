@@ -183,6 +183,15 @@ curl -fsSL https://raw.githubusercontent.com/EK-LABS-LLC/trace-service/main/scri
 
 Re-running the installer upgrades the binaries and dashboard assets in place and preserves `~/.pulse` data.
 
+For local managed use after install:
+
+```bash
+pulse up
+pulse dashboard
+```
+
+On first run, `pulse up` starts `pulse-server`, bootstraps local config, and writes the API key/project id to `~/.pulse/config.toml`. `pulse dashboard` opens the local dashboard through a one-time local login URL.
+
 Install a specific tag:
 
 ```bash

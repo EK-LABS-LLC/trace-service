@@ -7,6 +7,15 @@
 
 ## Single Mode Runbook
 
+For normal local managed use after installing the binaries, prefer:
+
+```bash
+pulse up
+pulse dashboard
+```
+
+`pulse up` performs first-time local bootstrap when config is missing. It stores the local API URL, API key, project ID, and server command in `~/.pulse/config.toml`; it does not store dashboard email/password credentials.
+
 ### Environment
 
 ```bash
