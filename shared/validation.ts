@@ -80,6 +80,7 @@ export const spanAnalyticsQuerySchema = z.object({
  */
 export const spanSourceSchema = z.enum([
   "claude_code",
+  "codex",
   "opencode",
   "openclaw",
 ]);
