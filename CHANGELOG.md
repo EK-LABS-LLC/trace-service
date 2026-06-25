@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fix Version Guard Release Baseline
+
+Date: 2026-06-24 21:56 CDT; Status: Completed; PR: #11 https://github.com/EK-LABS-LLC/trace-service/pull/11
+Task: Compare service version checks against released tags instead of main.
+Fixed: PR CI now requires package.json to be above the latest release tag.
+
 ### Guard Service Release Version
 
 Date: 2026-06-24 18:25 CDT; Status: Completed; PR: #10 https://github.com/EK-LABS-LLC/trace-service/pull/10
