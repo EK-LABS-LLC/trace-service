@@ -1,5 +1,6 @@
 {
   "name": "trace-service",
+  "version": "0.2.11",
   "module": "pulse.ts",
   "type": "module",
   "private": true,

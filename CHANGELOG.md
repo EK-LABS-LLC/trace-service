@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Guard Service Release Version
+
+Date: 2026-06-24 18:25 CDT; Status: Completed; PR: pending
+Task: Add an internal service version and prevent stale release versions from merging.
+Changed: Added trace-service package version 0.2.11.
+Added: PR CI now checks that package.json is bumped above main/latest tag.
+
 ### Codex Span Source Support
 
 Date: 2026-06-23 17:45 CDT; Status: Completed; PR: #9 https://github.com/EK-LABS-LLC/trace-service/pull/9
