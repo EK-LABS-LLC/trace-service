@@ -1,4 +1,4 @@
-.PHONY: install dev dev-api dev-listener dev-scale dev-scale-api dev-scale-listener up down scale-up scale-down migrate migrate-scale migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-e2e-split test-e2e-scale test-e2e-scale-split test-watch build build-scale release-artifacts clean
+.PHONY: install dev dev-api dev-listener dev-scale dev-scale-api dev-scale-listener up down scale-up scale-down migrate migrate-scale migrate-gen migrate-push studio seed seed-existing-project seed-with-api-key test test-e2e test-e2e-split test-e2e-scale test-e2e-scale-split test-watch build build-scale release-artifacts clean bump
 
 SCALE_DATABASE_PORT ?= 55433
 SCALE_DATABASE_URL ?= postgresql://pulse:pulse@localhost:$(SCALE_DATABASE_PORT)/pulse
@@ -12,6 +12,10 @@ scale-down:
 
 install:
 	bun install
+
+bump:
+	@test -n "$(VERSION)" || (echo "Usage: make bump VERSION=x.y.z"; exit 2)
+	./scripts/bump-version.sh "$(VERSION)"
 
 # Local development (SQLite + app)
 dev: migrate

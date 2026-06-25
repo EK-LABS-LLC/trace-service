@@ -6,6 +6,7 @@
 
 Date: 2026-06-24 21:56 CDT; Status: Completed; PR: #11 https://github.com/EK-LABS-LLC/trace-service/pull/11
 Task: Compare service version checks against released tags instead of main.
+Changed: Bumped trace-service package version to 0.2.12.
 Fixed: PR CI now requires package.json to be above the latest release tag.
 
 ### Guard Service Release Version
