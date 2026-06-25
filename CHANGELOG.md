@@ -4,7 +4,7 @@
 
 ### Guard Service Release Version
 
-Date: 2026-06-24 18:25 CDT; Status: Completed; PR: pending
+Date: 2026-06-24 18:25 CDT; Status: Completed; PR: #10 https://github.com/EK-LABS-LLC/trace-service/pull/10
 Task: Add an internal service version and prevent stale release versions from merging.
 Changed: Added trace-service package version 0.2.11.
 Added: PR CI now checks that package.json is bumped above main/latest tag.
