@@ -38,29 +38,17 @@ version_gt() {
   (( 10#$current_patch > 10#$base_patch ))
 }
 
-base_ref="${BASE_REF:-origin/${GITHUB_BASE_REF:-main}}"
 current_version="$(version_from_package_json package.json)"
-base_package="$(mktemp)"
-trap 'rm -f "$base_package"' EXIT
+latest_release_version="$(latest_tag_version)"
 
-if git show "$base_ref:package.json" > "$base_package"; then
-  base_version="$(version_from_package_json "$base_package")"
-else
-  base_version=""
-fi
-
-if [[ -z "$base_version" ]]; then
-  base_version="$(latest_tag_version)"
-fi
-
-if [[ -z "$current_version" || -z "$base_version" ]]; then
-  echo "::error::Could not resolve trace-service versions. current=$current_version base=$base_version" >&2
+if [[ -z "$current_version" || -z "$latest_release_version" ]]; then
+  echo "::error::Could not resolve trace-service versions. current=$current_version latest_release=$latest_release_version" >&2
   exit 1
 fi
 
-if ! version_gt "$current_version" "$base_version"; then
-  echo "::error::trace-service version must be bumped above $base_version before merging this PR. Current version is $current_version." >&2
+if ! version_gt "$current_version" "$latest_release_version"; then
+  echo "::error::trace-service version must be bumped above latest release v$latest_release_version before merging this PR. Current version is $current_version." >&2
   exit 1
 fi
 
-echo "trace-service version bump OK: $base_version -> $current_version."
+echo "trace-service version OK: latest release v$latest_release_version -> $current_version."
