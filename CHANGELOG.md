@@ -4,7 +4,7 @@
 
 ### Add Install Version Metadata
 
-Date: 2026-06-28 00:00 CDT; Status: Completed; PR: pending
+Date: 2026-06-28 00:00 CDT; Status: Completed; PR: #12 https://github.com/EK-LABS-LLC/trace-service/pull/12
 Task: Let the CLI detect installed server/dashboard release versions.
 Changed: Bumped trace-service package version to 0.2.13.
 Added: Installer writes `.pulse-install.toml` next to installed binaries.
