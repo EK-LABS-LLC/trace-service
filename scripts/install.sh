@@ -111,6 +111,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 DASHBOARD_ARCHIVE="pulse-dashboard-assets.tar.gz"
 DASHBOARD_DIR="${INSTALL_DIR}/dashboard"
+INSTALL_METADATA="${INSTALL_DIR}/.pulse-install.toml"
 
 # Resolve release tag + verify artifact integrity against checksums.
 fetch_tag() {
@@ -204,9 +205,15 @@ install -m 0755 "${TMP_DIR}/${DOWNLOADED_ASSET}" "${INSTALL_DIR}/${BINARY}"
 rm -rf "$DASHBOARD_DIR"
 mkdir -p "$DASHBOARD_DIR"
 tar -xzf "${TMP_DIR}/${DASHBOARD_ARCHIVE}" -C "$DASHBOARD_DIR" --strip-components=1
+cat > "$INSTALL_METADATA" <<EOF
+server_version = "${TAG}"
+server_repo = "${REPO}"
+dashboard_assets_version = "${TAG}"
+EOF
 
 echo "Installed ${BINARY} to ${INSTALL_DIR}/${BINARY}"
 echo "Installed dashboard assets to ${DASHBOARD_DIR}"
+echo "Wrote install metadata to ${INSTALL_METADATA}"
 
 if [[ "$REQUESTED_SCALE_MODE" == "1" ]]; then
   echo "Scale mode now uses the same binary. Start with:"
