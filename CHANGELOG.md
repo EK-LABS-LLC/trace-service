@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fix Sessions Agent Dashboard
+
+Date: 2026-07-05 10:00 CDT; Status: Completed; PR: #13 https://github.com/EK-LABS-LLC/trace-service/pull/13
+Task: Make Sessions -> Agents stable and URL-backed.
+Changed: Bumped trace-service package version to 0.2.14.
+Fixed/Changed: Agent sessions now use backend grouped span summaries instead of a 500-span frontend window, preserving totals and dates as span volume grows.
+Added/Changed: Sessions date range and sort controls are functional, URL-backed, and styled as dashboard-native toolbar menus.
+
 ### Add Install Version Metadata
 
 Date: 2026-06-28 00:00 CDT; Status: Completed; PR: #12 https://github.com/EK-LABS-LLC/trace-service/pull/12
