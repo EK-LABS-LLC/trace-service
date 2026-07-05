@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import type { Trace } from "../lib/apiClient";
 import SessionsTable from "../components/sessions/SessionsTable";
@@ -46,6 +46,23 @@ const ChevronDownIcon = () => (
   </svg>
 );
 
+const SortIcon = () => (
+  <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+    />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  </svg>
+);
+
 const DATE_RANGE_LABELS: Record<DateRange, string> = {
   all: "All time",
   "24h": "Last 24 hours",
@@ -60,6 +77,108 @@ const SORT_LABELS: Record<SessionSort, string> = {
   errors: "Errors",
   volume: "Volume",
 };
+
+interface ToolbarMenuProps<T extends string> {
+  ariaLabel: string;
+  icon: ReactNode;
+  prefix?: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}
+
+function ToolbarMenu<T extends string>({
+  ariaLabel,
+  icon,
+  prefix,
+  value,
+  options,
+  onChange,
+}: ToolbarMenuProps<T>) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="group inline-flex h-8 items-center gap-2 rounded border border-neutral-800 bg-neutral-900/80 px-3 text-sm text-neutral-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:border-neutral-700 hover:bg-neutral-850 focus:outline-none focus:ring-1 focus:ring-accent/50"
+      >
+        {icon}
+        {prefix ? <span className="text-neutral-500">{prefix}</span> : null}
+        <span className="whitespace-nowrap text-neutral-300">{selected?.label}</span>
+        <span
+          className={`text-neutral-500 transition-transform group-hover:text-neutral-400 ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          <ChevronDownIcon />
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          aria-label={ariaLabel}
+          className="absolute right-0 top-full z-50 mt-1.5 min-w-full overflow-hidden rounded border border-neutral-800 bg-neutral-950/95 p-1 shadow-xl shadow-black/30 backdrop-blur"
+        >
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-4 rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors ${
+                  active
+                    ? "bg-neutral-850 text-white"
+                    : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                }`}
+              >
+                <span className="whitespace-nowrap">{option.label}</span>
+                <span className={active ? "text-accent" : "text-transparent"}>
+                  <CheckIcon />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function validTab(value: string | null): ViewTab {
   return value === "agents" ? "agents" : "llm";
@@ -270,22 +389,16 @@ export default function Sessions() {
           <span className="text-xs text-neutral-500">{total.toLocaleString()} total</span>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 px-3 py-1.5 text-sm text-neutral-300 rounded border border-neutral-700 hover:bg-neutral-850 hover:border-neutral-600 transition-colors">
-            <CalendarIcon />
-            <select
-              value={dateRange}
-              onChange={(event) => selectDateRange(event.target.value as DateRange)}
-              className="bg-transparent text-sm text-neutral-300 outline-none"
-              aria-label="Date range"
-            >
-              {(Object.keys(DATE_RANGE_LABELS) as DateRange[]).map((range) => (
-                <option key={range} value={range} className="bg-neutral-950">
-                  {DATE_RANGE_LABELS[range]}
-                </option>
-              ))}
-            </select>
-            <ChevronDownIcon />
-          </label>
+          <ToolbarMenu
+            ariaLabel="Date range"
+            icon={<CalendarIcon />}
+            value={dateRange}
+            options={(Object.keys(DATE_RANGE_LABELS) as DateRange[]).map((range) => ({
+              value: range,
+              label: DATE_RANGE_LABELS[range],
+            }))}
+            onChange={selectDateRange}
+          />
           <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-neutral-500">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
@@ -314,30 +427,17 @@ export default function Sessions() {
               />
             </div>
           </div>
-          <label className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-neutral-400 rounded border border-neutral-700 hover:bg-neutral-850 hover:border-neutral-600 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-              />
-            </svg>
-            <span>Sort:</span>
-            <select
-              value={sort}
-              onChange={(event) => selectSort(event.target.value as SessionSort)}
-              className="bg-transparent text-sm text-neutral-300 outline-none"
-              aria-label="Sort sessions"
-            >
-              {(Object.keys(SORT_LABELS) as SessionSort[]).map((sortOption) => (
-                <option key={sortOption} value={sortOption} className="bg-neutral-950">
-                  {SORT_LABELS[sortOption]}
-                </option>
-              ))}
-            </select>
-            <ChevronDownIcon />
-          </label>
+          <ToolbarMenu
+            ariaLabel="Sort sessions"
+            icon={<SortIcon />}
+            prefix="Sort:"
+            value={sort}
+            options={(Object.keys(SORT_LABELS) as SessionSort[]).map((sortOption) => ({
+              value: sortOption,
+              label: SORT_LABELS[sortOption],
+            }))}
+            onChange={selectSort}
+          />
         </div>
       </div>
 
