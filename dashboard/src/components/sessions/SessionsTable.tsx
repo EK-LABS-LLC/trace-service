@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export interface SessionSummary {
   session_id: string;
@@ -67,12 +67,15 @@ function formatCost(cents: number): string {
 
 export default function SessionsTable({ sessions, onRowClick }: SessionsTableProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleRowClick = (sessionId: string) => {
     if (onRowClick) {
       onRowClick(sessionId);
     } else {
-      navigate(`/dashboard/sessions/${encodeURIComponent(sessionId)}`);
+      navigate(`/dashboard/sessions/${encodeURIComponent(sessionId)}`, {
+        state: { returnTo: `${location.pathname}${location.search}` },
+      });
     }
   };
 

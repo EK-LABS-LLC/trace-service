@@ -197,8 +197,7 @@ function validSort(value: string | null): SessionSort {
 function getDateRangeParams(range: DateRange): { date_from?: string; date_to?: string } {
   if (range === "all") return {};
 
-  const to = new Date();
-  const from = new Date(to);
+  const from = new Date();
   if (range === "24h") {
     from.setHours(from.getHours() - 24);
   } else if (range === "7d") {
@@ -207,7 +206,7 @@ function getDateRangeParams(range: DateRange): { date_from?: string; date_to?: s
     from.setDate(from.getDate() - 30);
   }
 
-  return { date_from: from.toISOString(), date_to: to.toISOString() };
+  return { date_from: from.toISOString() };
 }
 
 function groupTracesIntoSessions(traces: Trace[]): SessionSummary[] {

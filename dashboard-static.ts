@@ -16,8 +16,8 @@ function resolveDashboardDistDir(): string | null {
   const candidates = [
     env.DASHBOARD_DIST_DIR,
     join(dirname(process.execPath), "dashboard"),
-    join(import.meta.dir, "dashboard", "dist"),
     join(import.meta.dir, "dist", "dashboard"),
+    join(import.meta.dir, "dashboard", "dist"),
   ].filter((value): value is string => Boolean(value));
 
   for (const candidate of candidates) {
