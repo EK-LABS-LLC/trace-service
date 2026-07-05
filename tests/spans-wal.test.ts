@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { resolveDataPaths } from "../lib/data-paths";
 
 function readSpanWalFiles(): string[] {
-  const walSpanDir =
-    process.env.WAL_SPAN_DIR ?? resolveDataPaths(process.env).walSpanDir;
+  const walSpanDir = process.env.WAL_SPAN_DIR ?? resolveDataPaths(process.env).walSpanDir;
   const segmentsDir = join(walSpanDir, "segments");
   if (!existsSync(segmentsDir)) return [];
 
@@ -15,6 +14,18 @@ function readSpanWalFiles(): string[] {
     .sort();
 
   return files.map((file) => readFileSync(join(segmentsDir, file), "utf-8"));
+}
+
+async function waitForSpanWalContents(spanIds: string[]): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const walContents = readSpanWalFiles().join("\n");
+    if (spanIds.every((spanId) => walContents.includes(spanId))) {
+      return walContents;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  return readSpanWalFiles().join("\n");
 }
 
 async function waitForSpan(projectApiKey: string, spanId: string): Promise<Response> {
@@ -60,9 +71,7 @@ describe("Span WAL service integration", () => {
     });
     expect(enqueueResponse.status).toBe(202);
 
-    await new Promise((resolve) => setTimeout(resolve, 200));
-
-    const walContents = readSpanWalFiles().join("\n");
+    const walContents = await waitForSpanWalContents([spanId]);
     expect(walContents).toContain(spanId);
     expect(walContents).toContain(testProject.id);
   });
@@ -113,7 +122,7 @@ describe("Span WAL service integration", () => {
           event_type: i % 2 === 0 ? "post_tool_use" : "subagent_stop",
           status: "success",
           tool_name: i % 2 === 0 ? "Edit" : undefined,
-        })),
+        }))
       ),
     });
     expect(enqueueResponse.status).toBe(202);
@@ -122,7 +131,7 @@ describe("Span WAL service integration", () => {
 
     const listResponse = await authFetch(
       `/v1/spans?session_id=${encodeURIComponent(sessionId)}&limit=100`,
-      testProject.apiKey,
+      testProject.apiKey
     );
     expect(listResponse.status).toBe(200);
 
@@ -132,7 +141,7 @@ describe("Span WAL service integration", () => {
       expect(persistedIds).toContain(spanId);
     }
 
-    const walContents = readSpanWalFiles().join("\n");
+    const walContents = await waitForSpanWalContents(spanIds);
     for (const spanId of spanIds) {
       expect(walContents).toContain(spanId);
     }

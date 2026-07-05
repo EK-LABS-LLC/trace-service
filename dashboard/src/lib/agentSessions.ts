@@ -1,10 +1,12 @@
-import type { Span } from "./apiClient";
+import type { ApiAgentSessionSummary, Span } from "./apiClient";
 
 export interface AgentSessionSummary {
   sessionId: string;
   displayName: string;
   subtitle: string;
   timestamp: string;
+  firstTimestamp: string;
+  lastTimestamp: string;
   status: "success" | "error";
   durationMs: number;
   agentRuns: number;
@@ -138,9 +140,17 @@ export function summarizeAgentSession(
     sessionId,
     displayName,
     subtitle: subtitleParts.join(" / "),
-    timestamp: first.timestamp,
+    timestamp: sorted[sorted.length - 1]?.timestamp ?? first.timestamp,
+    firstTimestamp: first.timestamp,
+    lastTimestamp: sorted[sorted.length - 1]?.timestamp ?? first.timestamp,
     status: errorCount > 0 ? "error" : "success",
-    durationMs: sessionSpan?.durationMs ?? 0,
+    durationMs:
+      sessionSpan?.durationMs ??
+      Math.max(
+        0,
+        new Date(sorted[sorted.length - 1]?.timestamp ?? first.timestamp).getTime() -
+          new Date(first.timestamp).getTime()
+      ),
     agentRuns,
     toolCalls,
     totalSpans: sorted.length,
@@ -170,4 +180,35 @@ export function groupSpansIntoAgentSessions(spans: Span[]): AgentSessionSummary[
   }
 
   return sessions.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+export function summarizeApiAgentSession(session: ApiAgentSessionSummary): AgentSessionSummary {
+  const sourceLabel = formatAgentSource(session.source);
+  const shortId = shortSessionId(session.sessionId);
+  const folderName = pathBaseName(session.cwd);
+  const displayName = folderName
+    ? `${sourceLabel} in ${folderName}`
+    : session.agentName
+      ? `${sourceLabel} ${session.agentName}`
+      : `${sourceLabel} ${shortId}`;
+  const subtitleParts = [sourceLabel, folderName, session.model, shortId].filter(Boolean);
+
+  return {
+    sessionId: session.sessionId,
+    displayName,
+    subtitle: subtitleParts.join(" / "),
+    timestamp: session.lastTimestamp,
+    firstTimestamp: session.firstTimestamp,
+    lastTimestamp: session.lastTimestamp,
+    status: session.status,
+    durationMs: session.durationMs,
+    agentRuns: session.agentRuns,
+    toolCalls: session.toolCalls,
+    totalSpans: session.totalSpans,
+    source: session.source,
+    sourceLabel,
+    cwd: session.cwd,
+    model: session.model,
+    shortId,
+  };
 }
