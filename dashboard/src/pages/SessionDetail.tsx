@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, Link, useLocation, useSearchParams } from "react-router-dom";
 import type { Trace, Span } from "../lib/apiClient";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { useSessionDetailQuery, useSessionSpansQuery } from "../api";
@@ -202,10 +202,19 @@ export default function SessionDetail() {
   const { selectedProject } = useProject();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const view = searchParams.get("view");
 
   const isAgentView = view === "agents";
+  const locationState = location.state as { returnTo?: unknown } | null;
+  const stateReturnTo =
+    typeof locationState?.returnTo === "string" &&
+    locationState.returnTo.startsWith("/dashboard/sessions")
+      ? locationState.returnTo
+      : null;
+  const returnTo =
+    stateReturnTo ?? (isAgentView ? "/dashboard/sessions?tab=agents" : "/dashboard/sessions");
 
   // Fetch traces for LLM view
   const sessionQuery = useSessionDetailQuery(selectedProject?.id, isAgentView ? undefined : id);
@@ -237,7 +246,7 @@ export default function SessionDetail() {
         loading={loading}
         error={error}
         onRetry={() => spansQuery.refetch()}
-        onBack={() => navigate("/dashboard/sessions?tab=agents")}
+        onBack={() => navigate(returnTo, { replace: true })}
       />
     );
   }
@@ -273,7 +282,7 @@ export default function SessionDetail() {
         <div className="text-center">
           <h1 className="text-2xl font-semibold text-neutral-100 mb-2">Session not found</h1>
           <p className="text-neutral-500 mb-6">The session you're looking for doesn't exist.</p>
-          <Link to="/dashboard/sessions" className="text-accent hover:underline">
+          <Link to={returnTo} className="text-accent hover:underline">
             Back to Sessions
           </Link>
         </div>
@@ -297,7 +306,7 @@ export default function SessionDetail() {
       <header className="h-14 flex items-center justify-between px-6 border-b border-neutral-800 flex-shrink-0 bg-neutral-950">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/dashboard/sessions")}
+            onClick={() => navigate(returnTo, { replace: true })}
             className="p-1.5 hover:bg-neutral-800 rounded text-neutral-500 hover:text-white transition-colors"
             title="Back to Sessions"
           >
@@ -316,7 +325,7 @@ export default function SessionDetail() {
         <div className="flex items-center gap-2">
           {sessionId ? (
             <Link
-              to={`/dashboard/traces?session_id=${sessionId}`}
+              to={`/dashboard/traces?session_id=${encodeURIComponent(sessionId)}`}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-accent hover:text-accent/80 transition-colors"
             >
               <ExternalLinkIcon />

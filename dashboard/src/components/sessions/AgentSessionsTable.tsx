@@ -3,6 +3,7 @@ import type { AgentSessionSummary } from "../../lib/agentSessions";
 
 interface AgentSessionsTableProps {
   sessions: AgentSessionSummary[];
+  returnTo?: string;
 }
 
 function formatTimeAgo(timestamp: string): string {
@@ -32,11 +33,13 @@ function formatDuration(ms: number): string {
   return `${ms}ms`;
 }
 
-export default function AgentSessionsTable({ sessions }: AgentSessionsTableProps) {
+export default function AgentSessionsTable({ sessions, returnTo }: AgentSessionsTableProps) {
   const navigate = useNavigate();
 
   const handleRowClick = (sessionId: string) => {
-    navigate(`/dashboard/sessions/${sessionId}?view=agents`);
+    navigate(`/dashboard/sessions/${encodeURIComponent(sessionId)}?view=agents`, {
+      state: { returnTo: returnTo ?? "/dashboard/sessions?tab=agents" },
+    });
   };
 
   if (sessions.length === 0) {

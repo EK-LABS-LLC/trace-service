@@ -1,11 +1,4 @@
-import type {
-  Trace,
-  NewTrace,
-  Session,
-  NewSession,
-  Span,
-  NewSpan,
-} from "./schema";
+import type { Trace, NewTrace, Session, NewSession, Span, NewSpan } from "./schema";
 
 /**
  * Query filters for trace lookups.
@@ -35,19 +28,43 @@ export interface TraceQueryResult {
 export interface SpanQueryFilters {
   sessionId?: string;
   source?: "claude_code" | "codex" | "opencode" | "openclaw";
-  kind?:
-    | "tool_use"
-    | "agent_run"
-    | "session"
-    | "user_prompt"
-    | "llm_response"
-    | "notification";
+  kind?: "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification";
   toolName?: string;
   status?: "success" | "error";
   dateFrom?: Date;
   dateTo?: Date;
   limit?: number;
   offset?: number;
+}
+
+export type AgentSessionSort = "recent" | "oldest" | "duration" | "errors" | "volume";
+
+export interface AgentSessionQueryFilters {
+  dateFrom?: Date;
+  dateTo?: Date;
+  limit?: number;
+  offset?: number;
+  sort?: AgentSessionSort;
+}
+
+export interface AgentSessionSummaryRow {
+  sessionId: string;
+  firstTimestamp: Date | string | number;
+  lastTimestamp: Date | string | number;
+  totalSpans: number;
+  agentRuns: number;
+  toolCalls: number;
+  errorCount: number;
+  sessionDurationMs: number | null;
+  source: string | null;
+  cwd: string | null;
+  model: string | null;
+  agentName: string | null;
+}
+
+export interface AgentSessionQueryResult {
+  sessions: AgentSessionSummaryRow[];
+  total: number;
 }
 
 /**
@@ -92,10 +109,7 @@ export interface StorageAdapter {
   /**
    * Query traces for a project with optional filters and pagination.
    */
-  queryTraces(
-    projectId: string,
-    filters?: TraceQueryFilters,
-  ): Promise<TraceQueryResult>;
+  queryTraces(projectId: string, filters?: TraceQueryFilters): Promise<TraceQueryResult>;
 
   /**
    * Count traces for a project with optional filters.
@@ -139,10 +153,15 @@ export interface StorageAdapter {
   /**
    * Query spans for a project with optional filters and pagination.
    */
-  querySpans(
+  querySpans(projectId: string, filters?: SpanQueryFilters): Promise<SpanQueryResult>;
+
+  /**
+   * Query agent sessions grouped from spans for a project.
+   */
+  queryAgentSessions(
     projectId: string,
-    filters?: SpanQueryFilters,
-  ): Promise<SpanQueryResult>;
+    filters?: AgentSessionQueryFilters
+  ): Promise<AgentSessionQueryResult>;
 
   /**
    * Count spans for a project with optional filters.

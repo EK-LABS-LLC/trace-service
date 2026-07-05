@@ -21,6 +21,7 @@ import {
 import { handleBatchTraces, getTraces, getTraceById } from "./traces";
 import { handleGetSessionTraces, handleGetSessionSpans } from "./sessions";
 import { handleGetAnalytics, handleGetSpanAnalytics } from "./analytics";
+import { getAgentSessions } from "./agent-sessions";
 import {
   handleBatchSpans,
   handleAsyncSpan,
@@ -89,6 +90,7 @@ dashboard.get(
   projectContextMiddleware,
   handleGetSpanAnalytics,
 );
+dashboard.get("/agent-sessions", projectContextMiddleware, getAgentSessions);
 dashboard.post("/spans/batch", projectContextMiddleware, handleBatchSpans);
 dashboard.post("/spans/async", projectContextMiddleware, handleAsyncSpan);
 dashboard.get("/spans", projectContextMiddleware, getSpans);

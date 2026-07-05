@@ -70,12 +70,7 @@ export interface Session {
 
 export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw";
 
-export type SpanKind =
-  | "tool_use"
-  | "agent_run"
-  | "session"
-  | "user_prompt"
-  | "notification";
+export type SpanKind = "tool_use" | "agent_run" | "session" | "user_prompt" | "notification";
 
 export interface Span {
   spanId: string;
@@ -102,6 +97,39 @@ export interface Span {
 export interface SpansResponse {
   spans: Span[];
   total: number;
+}
+
+export type AgentSessionSort = "recent" | "oldest" | "duration" | "errors" | "volume";
+
+export interface GetAgentSessionsParams {
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+  sort?: AgentSessionSort;
+}
+
+export interface ApiAgentSessionSummary {
+  sessionId: string;
+  firstTimestamp: string;
+  lastTimestamp: string;
+  status: "success" | "error";
+  durationMs: number;
+  agentRuns: number;
+  toolCalls: number;
+  totalSpans: number;
+  errorCount: number;
+  source?: SpanSource;
+  cwd?: string;
+  model?: string;
+  agentName?: string;
+}
+
+export interface AgentSessionsResponse {
+  sessions: ApiAgentSessionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface GetSpansParams {
@@ -251,9 +279,7 @@ export interface CreateProjectUserInput {
   role?: "admin" | "user";
 }
 
-export const getTraces = async (
-  params: GetTracesParams = {},
-): Promise<TracesResponse> => {
+export const getTraces = async (params: GetTracesParams = {}): Promise<TracesResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/traces`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
@@ -277,16 +303,14 @@ export const getTrace = async (id: string): Promise<Trace> => {
 };
 
 export const getSession = async (id: string): Promise<Session> => {
-  const response = await fetch(`${getBaseUrl()}/dashboard/api/sessions/${id}`, {
+  const response = await fetch(`${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(id)}`, {
     credentials: "include",
     headers: getProjectHeaders(),
   });
   return handleResponse<Session>(response);
 };
 
-export const getSpans = async (
-  params: GetSpansParams = {},
-): Promise<SpansResponse> => {
+export const getSpans = async (params: GetSpansParams = {}): Promise<SpansResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/spans`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
@@ -301,9 +325,24 @@ export const getSpans = async (
   return handleResponse<SpansResponse>(response);
 };
 
-export const getAnalytics = async (
-  params: GetAnalyticsParams = {},
-): Promise<AnalyticsResponse> => {
+export const getAgentSessions = async (
+  params: GetAgentSessionsParams = {}
+): Promise<AgentSessionsResponse> => {
+  const url = new URL(`${getBaseUrl()}/dashboard/api/agent-sessions`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    credentials: "include",
+    headers: getProjectHeaders(),
+  });
+  return handleResponse<AgentSessionsResponse>(response);
+};
+
+export const getAnalytics = async (params: GetAnalyticsParams = {}): Promise<AnalyticsResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/analytics`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
@@ -319,7 +358,7 @@ export const getAnalytics = async (
 };
 
 export const getSpansAnalytics = async (
-  params: GetSpansAnalyticsParams,
+  params: GetSpansAnalyticsParams
 ): Promise<SpansAnalyticsResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/analytics/spans`);
   Object.entries(params).forEach(([key, value]) => {
@@ -335,22 +374,18 @@ export const getSpansAnalytics = async (
   return handleResponse<SpansAnalyticsResponse>(response);
 };
 
-export const getSessionSpans = async (
-  sessionId: string,
-): Promise<SessionSpansResponse> => {
+export const getSessionSpans = async (sessionId: string): Promise<SessionSpansResponse> => {
   const response = await fetch(
-    `${getBaseUrl()}/dashboard/api/sessions/${sessionId}/spans`,
+    `${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(sessionId)}/spans`,
     {
       credentials: "include",
       headers: getProjectHeaders(),
-    },
+    }
   );
   return handleResponse<SessionSpansResponse>(response);
 };
 
-export const createProject = async (
-  name: string,
-): Promise<CreateProjectResult> => {
+export const createProject = async (name: string): Promise<CreateProjectResult> => {
   const response = await fetch(`${getBaseUrl()}/dashboard/api/projects`, {
     method: "POST",
     credentials: "include",
@@ -370,36 +405,28 @@ export const getApiKeys = async (): Promise<ApiKeysResponse> => {
   return handleResponse<ApiKeysResponse>(response);
 };
 
-export const deleteApiKey = async (
-  keyId: string,
-): Promise<{ success: boolean }> => {
-  const response = await fetch(
-    `${getBaseUrl()}/dashboard/api/api-keys/${keyId}`,
-    {
-      method: "DELETE",
-      credentials: "include",
-      headers: getProjectHeaders(),
-    },
-  );
+export const deleteApiKey = async (keyId: string): Promise<{ success: boolean }> => {
+  const response = await fetch(`${getBaseUrl()}/dashboard/api/api-keys/${keyId}`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: getProjectHeaders(),
+  });
   return handleResponse<{ success: boolean }>(response);
 };
 
 export const updateApiKeyName = async (
   keyId: string,
-  name: string,
+  name: string
 ): Promise<{ success: boolean }> => {
-  const response = await fetch(
-    `${getBaseUrl()}/dashboard/api/api-keys/${keyId}`,
-    {
-      method: "PATCH",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...getProjectHeaders(),
-      },
-      body: JSON.stringify({ name }),
+  const response = await fetch(`${getBaseUrl()}/dashboard/api/api-keys/${keyId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...getProjectHeaders(),
     },
-  );
+    body: JSON.stringify({ name }),
+  });
   return handleResponse<{ success: boolean }>(response);
 };
 
@@ -424,7 +451,7 @@ export const getProjectUsers = async (): Promise<ProjectUsersResponse> => {
 };
 
 export const createProjectUser = async (
-  input: CreateProjectUserInput,
+  input: CreateProjectUserInput
 ): Promise<{ user: ProjectUserInfo }> => {
   const response = await fetch(`${getBaseUrl()}/dashboard/api/users`, {
     method: "POST",

@@ -1,13 +1,25 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 describe("local dashboard login", () => {
   let app: Awaited<ReturnType<typeof loadApp>>;
+  let originalPulseHome: string | undefined;
+  let originalDashboardDistDir: string | undefined;
 
   beforeAll(async () => {
+    originalPulseHome = process.env.PULSE_HOME;
+    originalDashboardDistDir = process.env.DASHBOARD_DIST_DIR;
     app = await loadApp();
+  });
+
+  afterAll(() => {
+    if (originalPulseHome === undefined) delete process.env.PULSE_HOME;
+    else process.env.PULSE_HOME = originalPulseHome;
+
+    if (originalDashboardDistDir === undefined) delete process.env.DASHBOARD_DIST_DIR;
+    else process.env.DASHBOARD_DIST_DIR = originalDashboardDistDir;
   });
 
   test("creates a dashboard session from a local API key", async () => {

@@ -78,12 +78,7 @@ export const spanAnalyticsQuerySchema = z.object({
 /**
  * Source identifies which CLI tool produced the span.
  */
-export const spanSourceSchema = z.enum([
-  "claude_code",
-  "codex",
-  "opencode",
-  "openclaw",
-]);
+export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw"]);
 
 /**
  * Span kind categorizes what the span represents.
@@ -198,6 +193,16 @@ export const spanQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+export const agentSessionSortSchema = z.enum(["recent", "oldest", "duration", "errors", "volume"]);
+
+export const agentSessionQuerySchema = z.object({
+  date_from: z.union([z.string(), z.coerce.number()]).optional(),
+  date_to: z.union([z.string(), z.coerce.number()]).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+  sort: agentSessionSortSchema.default("recent"),
+});
+
 /**
  * Inferred TypeScript types from schemas
  */
@@ -216,3 +221,5 @@ export type SpanKind = z.infer<typeof spanKindSchema>;
 export type SpanInput = z.infer<typeof spanSchema>;
 export type BatchSpanInput = z.infer<typeof batchSpanSchema>;
 export type SpanQueryParams = z.infer<typeof spanQuerySchema>;
+export type AgentSessionSort = z.infer<typeof agentSessionSortSchema>;
+export type AgentSessionQueryParams = z.infer<typeof agentSessionQuerySchema>;
