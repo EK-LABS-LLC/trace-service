@@ -1,18 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
-
-export interface SessionSummary {
-  session_id: string;
-  first_trace_time: string;
-  last_trace_time: string;
-  trace_count: number;
-  total_tokens: number;
-  total_cost_cents: number;
-  error_count: number;
-  user?: string;
-}
+import type { OTelSessionSummary } from "../../lib/apiClient";
 
 interface SessionsTableProps {
-  sessions: SessionSummary[];
+  sessions: OTelSessionSummary[];
   onRowClick?: (sessionId: string) => void;
 }
 
@@ -41,11 +31,8 @@ function formatRelativeTime(dateStr: string): string {
   return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`;
 }
 
-function formatDuration(startStr: string, endStr: string): string {
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  const diffMs = end.getTime() - start.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
+function formatDuration(diffMs: number): string {
+  const diffSecs = Math.max(0, Math.floor(diffMs / 1000));
   const mins = Math.floor(diffSecs / 60);
   const secs = diffSecs % 60;
   if (mins > 0) {
@@ -109,63 +96,67 @@ export default function SessionsTable({ sessions, onRowClick }: SessionsTablePro
         <thead className="bg-neutral-900">
           <tr className="border-b border-neutral-800">
             <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Session ID</th>
-            <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Started</th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Last Activity</th>
             <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Traces</th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Spans</th>
             <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Tokens</th>
             <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Cost</th>
             <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Duration</th>
-            <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">User</th>
+            <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Source</th>
             <th className="text-left py-3 px-4 text-xs font-medium text-neutral-500">Status</th>
           </tr>
         </thead>
         <tbody>
           {sessions.map((session) => (
             <tr
-              key={session.session_id}
-              onClick={() => handleRowClick(session.session_id)}
+              key={session.sessionId}
+              onClick={() => handleRowClick(session.sessionId)}
               className={`border-b border-neutral-800 cursor-pointer transition-colors hover:bg-neutral-850 ${
-                session.error_count > 0 ? "bg-rose-500/5 hover:bg-rose-500/8" : "bg-neutral-900"
+                session.errorCount > 0 ? "bg-rose-500/5 hover:bg-rose-500/8" : "bg-neutral-900"
               }`}
             >
               <td className="py-3 px-4">
-                <span className="text-sm font-mono text-accent">{session.session_id}</span>
+                <span className="block max-w-[280px] truncate text-sm font-mono text-accent" title={session.sessionId}>
+                  {session.sessionId}
+                </span>
               </td>
               <td className="py-3 px-4">
-                <div className="text-sm">{formatDate(session.first_trace_time)}</div>
+                <div className="text-sm">{formatDate(session.lastTimestamp)}</div>
                 <div className="text-xs text-neutral-500">
-                  {formatRelativeTime(session.first_trace_time)}
+                  {formatRelativeTime(session.lastTimestamp)}
                 </div>
               </td>
               <td className="py-3 px-4">
-                <span className="text-sm">{session.trace_count}</span>
+                <span className="text-sm">{session.traceCount}</span>
+              </td>
+              <td className="py-3 px-4">
+                <span className="text-sm text-neutral-400">{session.spanCount}</span>
               </td>
               <td className="py-3 px-4">
                 <span className="text-sm text-neutral-400">
-                  {formatTokens(session.total_tokens)}
+                  {formatTokens(session.inputTokens + session.outputTokens)}
                 </span>
               </td>
               <td className="py-3 px-4">
-                <span className="text-sm">{formatCost(session.total_cost_cents)}</span>
+                <span className="text-sm">{formatCost(session.costCents)}</span>
               </td>
               <td className="py-3 px-4">
-                <span className="text-sm">
-                  {formatDuration(session.first_trace_time, session.last_trace_time)}
-                </span>
+                <span className="text-sm">{formatDuration(session.durationMs)}</span>
               </td>
               <td className="py-3 px-4">
-                {session.user ? (
+                {session.source ? (
                   <span className="text-xs px-1.5 py-0.5 bg-neutral-800 text-neutral-400 rounded">
-                    {session.user}
+                    {session.source}
                   </span>
                 ) : (
                   <span className="text-xs text-neutral-600">—</span>
                 )}
               </td>
               <td className="py-3 px-4">
-                {session.error_count > 0 ? (
+                {session.errorCount > 0 ? (
                   <span className="text-xs px-1.5 py-0.5 bg-error/10 text-error rounded">
-                    {session.error_count} Error
-                    {session.error_count > 1 ? "s" : ""}
+                    {session.errorCount} Error
+                    {session.errorCount > 1 ? "s" : ""}
                   </span>
                 ) : (
                   <span className="text-xs px-1.5 py-0.5 bg-neutral-800 text-neutral-400 rounded">

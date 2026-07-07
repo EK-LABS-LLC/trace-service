@@ -68,14 +68,33 @@ export interface Session {
   spans?: Span[];
 }
 
-export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw";
+export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw" | "sdk" | "otel";
 
-export type SpanKind = "tool_use" | "agent_run" | "session" | "user_prompt" | "notification";
+export type SpanKind =
+  | "tool_use"
+  | "agent_run"
+  | "session"
+  | "user_prompt"
+  | "llm_response"
+  | "notification"
+  | "llm_call";
 
 export interface Span {
   spanId: string;
   sessionId: string;
+  traceId?: string;
   parentSpanId?: string;
+  name?: string;
+  otelKind?: string;
+  startTimeUnixNano?: string;
+  endTimeUnixNano?: string;
+  statusCode?: string;
+  statusMessage?: string;
+  attributes?: Record<string, unknown>;
+  events?: unknown[];
+  links?: unknown[];
+  resource?: Record<string, unknown>;
+  scope?: Record<string, unknown>;
   timestamp: string;
   durationMs?: number;
   source: SpanSource;
@@ -130,6 +149,74 @@ export interface AgentSessionsResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export type OTelSummarySort = "recent" | "oldest" | "duration" | "errors" | "volume";
+
+export interface GetOTelSessionsParams {
+  date_from?: string;
+  date_to?: string;
+  limit?: number;
+  offset?: number;
+  sort?: OTelSummarySort;
+}
+
+export interface OTelSessionSummary {
+  sessionId: string;
+  firstTimestamp: string;
+  lastTimestamp: string;
+  traceCount: number;
+  spanCount: number;
+  errorCount: number;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  source?: string | null;
+}
+
+export interface OTelSessionsResponse {
+  sessions: OTelSessionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface GetOTelTracesParams extends GetOTelSessionsParams {
+  status?: "success" | "error";
+}
+
+export interface OTelTraceSummary {
+  traceId: string;
+  projectId: string;
+  sessionId?: string | null;
+  rootSpanId?: string | null;
+  name: string;
+  source: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  status: "success" | "error";
+  spanCount: number;
+  errorCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  attributes?: Record<string, unknown> | null;
+}
+
+export interface OTelSessionTracesResponse {
+  sessionId: string;
+  traces: OTelTraceSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface OTelTraceSpansResponse {
+  traceId: string;
+  spans: Span[];
+  total: number;
 }
 
 export interface GetSpansParams {
@@ -340,6 +427,65 @@ export const getAgentSessions = async (
     headers: getProjectHeaders(),
   });
   return handleResponse<AgentSessionsResponse>(response);
+};
+
+export const getOTelSessions = async (
+  params: GetOTelSessionsParams = {}
+): Promise<OTelSessionsResponse> => {
+  const url = new URL(`${getBaseUrl()}/dashboard/api/otel/sessions`);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    credentials: "include",
+    headers: getProjectHeaders(),
+  });
+  return handleResponse<OTelSessionsResponse>(response);
+};
+
+export const getOTelSessionTraces = async (
+  sessionId: string,
+  params: GetOTelTracesParams = {}
+): Promise<OTelSessionTracesResponse> => {
+  const url = new URL(
+    `${getBaseUrl()}/dashboard/api/otel/sessions/${encodeURIComponent(sessionId)}/traces`
+  );
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url.toString(), {
+    credentials: "include",
+    headers: getProjectHeaders(),
+  });
+  return handleResponse<OTelSessionTracesResponse>(response);
+};
+
+export const getOTelTrace = async (traceId: string): Promise<OTelTraceSummary> => {
+  const response = await fetch(
+    `${getBaseUrl()}/dashboard/api/otel/traces/${encodeURIComponent(traceId)}`,
+    {
+      credentials: "include",
+      headers: getProjectHeaders(),
+    }
+  );
+  return handleResponse<OTelTraceSummary>(response);
+};
+
+export const getOTelTraceSpans = async (traceId: string): Promise<OTelTraceSpansResponse> => {
+  const response = await fetch(
+    `${getBaseUrl()}/dashboard/api/otel/traces/${encodeURIComponent(traceId)}/spans`,
+    {
+      credentials: "include",
+      headers: getProjectHeaders(),
+    }
+  );
+  return handleResponse<OTelTraceSpansResponse>(response);
 };
 
 export const getAnalytics = async (params: GetAnalyticsParams = {}): Promise<AnalyticsResponse> => {

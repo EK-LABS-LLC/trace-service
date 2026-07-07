@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Add Experimental OTel Trace Model
+
+Date: 2026-07-07 CDT; Status: Completed; PR: TBD
+Task: Move Pulse toward an OTel-compatible Session -> Trace -> Span architecture.
+Changed: Bumped trace-service package version to 0.3.0.
+Added/Changed: `POST /v1/traces` now accepts OTLP HTTP JSON, spans are the canonical telemetry records, trace summaries are derived from spans, dashboard sessions read from OTel summaries, and legacy trace/span endpoints route through compatibility adapters during the migration window.
+Added: Idempotent OTel backfill command and test coverage for OTLP ingest, legacy adapters, session trace detail, trace span detail, date/sort filters, and compatibility reads.
+
 ### Fix Sessions Agent Dashboard
 
 Date: 2026-07-05 10:00 CDT; Status: Completed; PR: #13 https://github.com/EK-LABS-LLC/trace-service/pull/13

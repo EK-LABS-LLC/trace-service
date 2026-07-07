@@ -1,10 +1,22 @@
 import { eq, and, gte, lte, count, desc, asc, sql } from "drizzle-orm";
-import { traces, sessions, spans } from "./schema-single";
-import type { Trace, NewTrace, Session, NewSession, Span, NewSpan } from "./schema-single";
+import { traces, traceSummaries, sessions, spans } from "./schema-single";
+import type {
+  Trace,
+  NewTrace,
+  TraceSummary,
+  NewTraceSummary,
+  Session,
+  NewSession,
+  Span,
+  NewSpan,
+} from "./schema-single";
 import type {
   StorageAdapter,
   TraceQueryFilters,
   TraceQueryResult,
+  TraceSummaryQueryFilters,
+  TraceSummaryQueryResult,
+  SessionSummaryQueryResult,
   AgentSessionQueryFilters,
   AgentSessionQueryResult,
   SpanQueryFilters,
@@ -123,6 +135,165 @@ export class SqliteStorage implements StorageAdapter {
     return countResult[0]?.total ?? 0;
   }
 
+  async upsertTraceSummary(projectId: string, summary: NewTraceSummary): Promise<TraceSummary> {
+    const values = { ...summary, projectId };
+    const result = await this.db
+      .insert(traceSummaries)
+      .values(values)
+      .onConflictDoUpdate({
+        target: traceSummaries.traceId,
+        set: values,
+      })
+      .returning();
+    return result[0]!;
+  }
+
+  async getTraceSummary(traceId: string, projectId: string): Promise<TraceSummary | null> {
+    const [summary] = await this.db
+      .select()
+      .from(traceSummaries)
+      .where(and(eq(traceSummaries.traceId, traceId), eq(traceSummaries.projectId, projectId)))
+      .limit(1);
+    return summary ?? null;
+  }
+
+  async queryTraceSummaries(
+    projectId: string,
+    filters: TraceSummaryQueryFilters = {}
+  ): Promise<TraceSummaryQueryResult> {
+    const conditions = [eq(traceSummaries.projectId, projectId)];
+
+    if (filters.sessionId) {
+      conditions.push(eq(traceSummaries.sessionId, filters.sessionId));
+    }
+    if (filters.source) {
+      conditions.push(eq(traceSummaries.source, filters.source));
+    }
+    if (filters.status) {
+      conditions.push(eq(traceSummaries.status, filters.status));
+    }
+    if (filters.source) {
+      conditions.push(eq(traceSummaries.source, filters.source));
+    }
+    if (filters.dateFrom) {
+      conditions.push(gte(traceSummaries.startedAt, filters.dateFrom));
+    }
+    if (filters.dateTo) {
+      conditions.push(lte(traceSummaries.startedAt, filters.dateTo));
+    }
+
+    const whereClause = and(...conditions);
+    const countResult = await this.db
+      .select({ total: count() })
+      .from(traceSummaries)
+      .where(whereClause);
+    const total = countResult[0]?.total ?? 0;
+
+    const sort = filters.sort ?? "recent";
+    const orderBy = (() => {
+      switch (sort) {
+        case "oldest":
+          return [asc(traceSummaries.startedAt), asc(traceSummaries.traceId)];
+        case "duration":
+          return [desc(traceSummaries.durationMs), desc(traceSummaries.startedAt)];
+        case "errors":
+          return [desc(traceSummaries.errorCount), desc(traceSummaries.startedAt)];
+        case "volume":
+          return [desc(traceSummaries.spanCount), desc(traceSummaries.startedAt)];
+        case "recent":
+        default:
+          return [desc(traceSummaries.startedAt), asc(traceSummaries.traceId)];
+      }
+    })();
+
+    const results = await this.db
+      .select()
+      .from(traceSummaries)
+      .where(whereClause)
+      .orderBy(...orderBy)
+      .limit(filters.limit ?? 100)
+      .offset(filters.offset ?? 0);
+
+    return { traces: results, total };
+  }
+
+  async querySessionSummaries(
+    projectId: string,
+    filters: TraceSummaryQueryFilters = {}
+  ): Promise<SessionSummaryQueryResult> {
+    const conditions = [
+      eq(traceSummaries.projectId, projectId),
+      sql`${traceSummaries.sessionId} IS NOT NULL`,
+    ];
+
+    if (filters.status) {
+      conditions.push(eq(traceSummaries.status, filters.status));
+    }
+    if (filters.dateFrom) {
+      conditions.push(gte(traceSummaries.startedAt, filters.dateFrom));
+    }
+    if (filters.dateTo) {
+      conditions.push(lte(traceSummaries.startedAt, filters.dateTo));
+    }
+
+    const whereClause = and(...conditions);
+    const countResult = await this.db
+      .select({ total: sql<number>`COUNT(DISTINCT ${traceSummaries.sessionId})` })
+      .from(traceSummaries)
+      .where(whereClause);
+    const total = Number(countResult[0]?.total ?? 0);
+
+    const firstTimestamp = sql<Date | number>`MIN(${traceSummaries.startedAt})`;
+    const lastTimestamp = sql<Date | number>`MAX(${traceSummaries.endedAt})`;
+    const traceCount = count();
+    const spanCount = sql<number>`SUM(${traceSummaries.spanCount})`;
+    const errorCount = sql<number>`SUM(${traceSummaries.errorCount})`;
+    const durationMs = sql<number>`MAX(${traceSummaries.endedAt}) - MIN(${traceSummaries.startedAt})`;
+    const inputTokens = sql<number>`SUM(${traceSummaries.inputTokens})`;
+    const outputTokens = sql<number>`SUM(${traceSummaries.outputTokens})`;
+    const costCents = sql<number>`SUM(${traceSummaries.costCents})`;
+
+    const sort = filters.sort ?? "recent";
+    const orderBy = (() => {
+      switch (sort) {
+        case "oldest":
+          return [asc(firstTimestamp), asc(traceSummaries.sessionId)];
+        case "duration":
+          return [desc(durationMs), desc(lastTimestamp)];
+        case "errors":
+          return [desc(errorCount), desc(lastTimestamp)];
+        case "volume":
+          return [desc(spanCount), desc(lastTimestamp)];
+        case "recent":
+        default:
+          return [desc(lastTimestamp), asc(traceSummaries.sessionId)];
+      }
+    })();
+
+    const sessions = await this.db
+      .select({
+        sessionId: traceSummaries.sessionId,
+        firstTimestamp,
+        lastTimestamp,
+        traceCount,
+        spanCount,
+        errorCount,
+        durationMs,
+        inputTokens,
+        outputTokens,
+        costCents,
+        source: sql<string | null>`MAX(${traceSummaries.source})`,
+      })
+      .from(traceSummaries)
+      .where(whereClause)
+      .groupBy(traceSummaries.sessionId)
+      .orderBy(...orderBy)
+      .limit(filters.limit ?? 100)
+      .offset(filters.offset ?? 0);
+
+    return { sessions, total };
+  }
+
   async upsertSession(projectId: string, session: NewSession): Promise<Session> {
     const insert = this.db.insert(sessions).values({ ...session, projectId });
 
@@ -150,8 +321,44 @@ export class SqliteStorage implements StorageAdapter {
     return this.db
       .select()
       .from(spans)
-      .where(and(eq(spans.sessionId, sessionId), eq(spans.projectId, projectId)))
+      .where(
+        and(
+          eq(spans.sessionId, sessionId),
+          eq(spans.projectId, projectId),
+          sql`${spans.source} != 'sdk'`,
+        ),
+      )
       .orderBy(asc(spans.timestamp));
+  }
+
+  async getTraceSpans(traceId: string, projectId: string): Promise<Span[]> {
+    return this.db
+      .select()
+      .from(spans)
+      .where(and(eq(spans.traceId, traceId), eq(spans.projectId, projectId)))
+      .orderBy(asc(spans.timestamp));
+  }
+
+  async getLatestTraceSummaryForSession(
+    sessionId: string,
+    projectId: string,
+    source?: string
+  ): Promise<TraceSummary | null> {
+    const conditions = [
+      eq(traceSummaries.sessionId, sessionId),
+      eq(traceSummaries.projectId, projectId),
+    ];
+    if (source) {
+      conditions.push(eq(traceSummaries.source, source));
+    }
+
+    const [summary] = await this.db
+      .select()
+      .from(traceSummaries)
+      .where(and(...conditions))
+      .orderBy(desc(traceSummaries.startedAt))
+      .limit(1);
+    return summary ?? null;
   }
 
   async insertSpan(projectId: string, span: NewSpan): Promise<Span> {
@@ -193,6 +400,9 @@ export class SqliteStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));
@@ -308,6 +518,9 @@ export class SqliteStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));

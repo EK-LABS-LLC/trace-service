@@ -1,6 +1,7 @@
 import type { StorageAdapter, SpanQueryFilters } from "../db/adapter";
 import type { Span, NewSpan } from "../db/schema";
 import { batchSpanSchema, type SpanInput } from "../shared/validation";
+import { legacySpanToOtelSpan, refreshTraceSummary } from "./otel";
 
 export interface IngestSpanResult {
   count: number;
@@ -14,28 +15,15 @@ export interface QuerySpanResult {
   offset: number;
 }
 
-function toNewSpan(input: SpanInput, projectId: string): NewSpan {
+async function toNewSpan(
+  input: SpanInput,
+  projectId: string,
+  storage: StorageAdapter,
+): Promise<NewSpan> {
+  const otelSpan = await legacySpanToOtelSpan(projectId, input, storage);
   return {
-    spanId: input.span_id,
+    ...otelSpan,
     projectId,
-    sessionId: input.session_id,
-    parentSpanId: input.parent_span_id,
-    timestamp: new Date(input.timestamp),
-    durationMs: input.duration_ms,
-    source: input.source,
-    kind: input.kind,
-    eventType: input.event_type,
-    status: input.status,
-    toolUseId: input.tool_use_id,
-    toolName: input.tool_name,
-    toolInput: input.tool_input,
-    toolResponse: input.tool_response,
-    error: input.error,
-    isInterrupt: input.is_interrupt,
-    cwd: input.cwd,
-    model: input.model,
-    agentName: input.agent_name,
-    metadata: input.metadata,
   };
 }
 
@@ -55,8 +43,11 @@ export async function ingestSpanBatch(
 ): Promise<IngestSpanResult> {
   const insertedSpans: Span[] = [];
   for (const spanInput of spans) {
-    const newSpan = toNewSpan(spanInput, projectId);
+    const newSpan = await toNewSpan(spanInput, projectId, storage);
     const inserted = await storage.insertSpan(projectId, newSpan);
+    if (inserted.traceId) {
+      await refreshTraceSummary(projectId, inserted.traceId, storage);
+    }
     insertedSpans.push(inserted);
   }
 
@@ -73,8 +64,11 @@ export async function ingestSpanBatchIdempotent(
 ): Promise<IngestSpanResult> {
   const insertedSpans: Span[] = [];
   for (const spanInput of spans) {
-    const newSpan = toNewSpan(spanInput, projectId);
+    const newSpan = await toNewSpan(spanInput, projectId, storage);
     const inserted = await storage.insertSpanIdempotent(projectId, newSpan);
+    if (inserted.traceId) {
+      await refreshTraceSummary(projectId, inserted.traceId, storage);
+    }
     insertedSpans.push(inserted);
   }
 

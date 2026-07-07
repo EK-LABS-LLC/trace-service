@@ -1,10 +1,22 @@
 import { eq, and, gte, lte, count, sql } from "drizzle-orm";
-import { traces, sessions, spans } from "./schema-scale";
-import type { Trace, NewTrace, Session, NewSession, Span, NewSpan } from "./schema-scale";
+import { traces, traceSummaries, sessions, spans } from "./schema-scale";
+import type {
+  Trace,
+  NewTrace,
+  TraceSummary,
+  NewTraceSummary,
+  Session,
+  NewSession,
+  Span,
+  NewSpan,
+} from "./schema-scale";
 import type {
   StorageAdapter,
   TraceQueryFilters,
   TraceQueryResult,
+  TraceSummaryQueryFilters,
+  TraceSummaryQueryResult,
+  SessionSummaryQueryResult,
   AgentSessionQueryFilters,
   AgentSessionQueryResult,
   SpanQueryFilters,
@@ -123,6 +135,165 @@ export class PostgresStorage implements StorageAdapter {
     return countResult[0]?.total ?? 0;
   }
 
+  async upsertTraceSummary(projectId: string, summary: NewTraceSummary): Promise<TraceSummary> {
+    const values = { ...summary, projectId };
+    const result = await this.db
+      .insert(traceSummaries)
+      .values(values)
+      .onConflictDoUpdate({
+        target: traceSummaries.traceId,
+        set: values,
+      })
+      .returning();
+    return result[0]!;
+  }
+
+  async getTraceSummary(traceId: string, projectId: string): Promise<TraceSummary | null> {
+    const [summary] = await this.db
+      .select()
+      .from(traceSummaries)
+      .where(and(eq(traceSummaries.traceId, traceId), eq(traceSummaries.projectId, projectId)))
+      .limit(1);
+    return summary ?? null;
+  }
+
+  async queryTraceSummaries(
+    projectId: string,
+    filters: TraceSummaryQueryFilters = {}
+  ): Promise<TraceSummaryQueryResult> {
+    const conditions = [eq(traceSummaries.projectId, projectId)];
+
+    if (filters.sessionId) {
+      conditions.push(eq(traceSummaries.sessionId, filters.sessionId));
+    }
+    if (filters.source) {
+      conditions.push(eq(traceSummaries.source, filters.source));
+    }
+    if (filters.status) {
+      conditions.push(eq(traceSummaries.status, filters.status));
+    }
+    if (filters.source) {
+      conditions.push(eq(traceSummaries.source, filters.source));
+    }
+    if (filters.dateFrom) {
+      conditions.push(gte(traceSummaries.startedAt, filters.dateFrom));
+    }
+    if (filters.dateTo) {
+      conditions.push(lte(traceSummaries.startedAt, filters.dateTo));
+    }
+
+    const whereClause = and(...conditions);
+    const countResult = await this.db
+      .select({ total: count() })
+      .from(traceSummaries)
+      .where(whereClause);
+    const total = countResult[0]?.total ?? 0;
+
+    const sort = filters.sort ?? "recent";
+    const orderBy = (() => {
+      switch (sort) {
+        case "oldest":
+          return [sql`${traceSummaries.startedAt} ASC`, sql`${traceSummaries.traceId} ASC`];
+        case "duration":
+          return [sql`${traceSummaries.durationMs} DESC`, sql`${traceSummaries.startedAt} DESC`];
+        case "errors":
+          return [sql`${traceSummaries.errorCount} DESC`, sql`${traceSummaries.startedAt} DESC`];
+        case "volume":
+          return [sql`${traceSummaries.spanCount} DESC`, sql`${traceSummaries.startedAt} DESC`];
+        case "recent":
+        default:
+          return [sql`${traceSummaries.startedAt} DESC`, sql`${traceSummaries.traceId} ASC`];
+      }
+    })();
+
+    const results = await this.db
+      .select()
+      .from(traceSummaries)
+      .where(whereClause)
+      .orderBy(...orderBy)
+      .limit(filters.limit ?? 100)
+      .offset(filters.offset ?? 0);
+
+    return { traces: results, total };
+  }
+
+  async querySessionSummaries(
+    projectId: string,
+    filters: TraceSummaryQueryFilters = {}
+  ): Promise<SessionSummaryQueryResult> {
+    const conditions = [
+      eq(traceSummaries.projectId, projectId),
+      sql`${traceSummaries.sessionId} IS NOT NULL`,
+    ];
+
+    if (filters.status) {
+      conditions.push(eq(traceSummaries.status, filters.status));
+    }
+    if (filters.dateFrom) {
+      conditions.push(gte(traceSummaries.startedAt, filters.dateFrom));
+    }
+    if (filters.dateTo) {
+      conditions.push(lte(traceSummaries.startedAt, filters.dateTo));
+    }
+
+    const whereClause = and(...conditions);
+    const countResult = await this.db
+      .select({ total: sql<number>`COUNT(DISTINCT ${traceSummaries.sessionId})` })
+      .from(traceSummaries)
+      .where(whereClause);
+    const total = Number(countResult[0]?.total ?? 0);
+
+    const firstTimestamp = sql<Date>`MIN(${traceSummaries.startedAt})`;
+    const lastTimestamp = sql<Date>`MAX(${traceSummaries.endedAt})`;
+    const traceCount = count();
+    const spanCount = sql<number>`SUM(${traceSummaries.spanCount})`;
+    const errorCount = sql<number>`SUM(${traceSummaries.errorCount})`;
+    const durationMs = sql<number>`EXTRACT(EPOCH FROM (MAX(${traceSummaries.endedAt}) - MIN(${traceSummaries.startedAt}))) * 1000`;
+    const inputTokens = sql<number>`SUM(${traceSummaries.inputTokens})`;
+    const outputTokens = sql<number>`SUM(${traceSummaries.outputTokens})`;
+    const costCents = sql<number>`SUM(${traceSummaries.costCents})`;
+
+    const sort = filters.sort ?? "recent";
+    const orderBy = (() => {
+      switch (sort) {
+        case "oldest":
+          return [sql`${firstTimestamp} ASC`, sql`${traceSummaries.sessionId} ASC`];
+        case "duration":
+          return [sql`${durationMs} DESC`, sql`${lastTimestamp} DESC`];
+        case "errors":
+          return [sql`${errorCount} DESC`, sql`${lastTimestamp} DESC`];
+        case "volume":
+          return [sql`${spanCount} DESC`, sql`${lastTimestamp} DESC`];
+        case "recent":
+        default:
+          return [sql`${lastTimestamp} DESC`, sql`${traceSummaries.sessionId} ASC`];
+      }
+    })();
+
+    const sessions = await this.db
+      .select({
+        sessionId: traceSummaries.sessionId,
+        firstTimestamp,
+        lastTimestamp,
+        traceCount,
+        spanCount,
+        errorCount,
+        durationMs,
+        inputTokens,
+        outputTokens,
+        costCents,
+        source: sql<string | null>`MAX(${traceSummaries.source})`,
+      })
+      .from(traceSummaries)
+      .where(whereClause)
+      .groupBy(traceSummaries.sessionId)
+      .orderBy(...orderBy)
+      .limit(filters.limit ?? 100)
+      .offset(filters.offset ?? 0);
+
+    return { sessions, total };
+  }
+
   async upsertSession(projectId: string, session: NewSession): Promise<Session> {
     const insert = this.db.insert(sessions).values({ ...session, projectId });
 
@@ -150,8 +321,44 @@ export class PostgresStorage implements StorageAdapter {
     return this.db
       .select()
       .from(spans)
-      .where(and(eq(spans.sessionId, sessionId), eq(spans.projectId, projectId)))
+      .where(
+        and(
+          eq(spans.sessionId, sessionId),
+          eq(spans.projectId, projectId),
+          sql`${spans.source} != 'sdk'`,
+        ),
+      )
       .orderBy(sql`${spans.timestamp} ASC`);
+  }
+
+  async getTraceSpans(traceId: string, projectId: string): Promise<Span[]> {
+    return this.db
+      .select()
+      .from(spans)
+      .where(and(eq(spans.traceId, traceId), eq(spans.projectId, projectId)))
+      .orderBy(sql`${spans.timestamp} ASC`);
+  }
+
+  async getLatestTraceSummaryForSession(
+    sessionId: string,
+    projectId: string,
+    source?: string
+  ): Promise<TraceSummary | null> {
+    const conditions = [
+      eq(traceSummaries.sessionId, sessionId),
+      eq(traceSummaries.projectId, projectId),
+    ];
+    if (source) {
+      conditions.push(eq(traceSummaries.source, source));
+    }
+
+    const [summary] = await this.db
+      .select()
+      .from(traceSummaries)
+      .where(and(...conditions))
+      .orderBy(sql`${traceSummaries.startedAt} DESC`)
+      .limit(1);
+    return summary ?? null;
   }
 
   async insertSpan(projectId: string, span: NewSpan): Promise<Span> {
@@ -193,6 +400,9 @@ export class PostgresStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));
@@ -308,6 +518,9 @@ export class PostgresStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));

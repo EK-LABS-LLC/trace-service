@@ -6,6 +6,7 @@ export const projects = schema.projects;
 export const apiKeys = schema.apiKeys;
 export const sessions = schema.sessions;
 export const traces = schema.traces;
+export const traceSummaries = schema.traceSummaries;
 export const userProjects = schema.userProjects;
 export const spans = schema.spans;
 
@@ -20,5 +21,7 @@ export type UserProject = any;
 export type NewUserProject = any;
 export type Trace = any;
 export type NewTrace = any;
+export type TraceSummary = any;
+export type NewTraceSummary = any;
 export type Span = any;
 export type NewSpan = any;

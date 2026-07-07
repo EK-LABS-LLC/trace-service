@@ -192,22 +192,32 @@ export function Sidebar() {
         {projectMenuOpen && (
           <div className="absolute left-3 right-3 top-full mt-1 bg-neutral-900 border border-neutral-800 rounded-lg shadow-xl overflow-hidden z-50">
             <div className="py-1">
-              {projects.map((project) => (
-                <button
-                  key={project.id}
-                  onClick={() => {
-                    setSelectedProject(project);
-                    setProjectMenuOpen(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-sm ${
-                    selectedProject?.id === project.id
-                      ? "text-white bg-accent/10"
-                      : "text-neutral-400 hover:text-white hover:bg-neutral-850"
-                  }`}
-                >
-                  {project.name}
-                </button>
-              ))}
+              <div
+                className="max-h-[min(22rem,calc(100vh-7rem))] overflow-y-auto overscroll-contain"
+                role="listbox"
+                aria-label="Select project"
+              >
+                {projects.map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selectedProject?.id === project.id}
+                    title={project.name}
+                    onClick={() => {
+                      setSelectedProject(project);
+                      setProjectMenuOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-sm ${
+                      selectedProject?.id === project.id
+                        ? "text-white bg-accent/10"
+                        : "text-neutral-400 hover:text-white hover:bg-neutral-850"
+                    }`}
+                  >
+                    <span className="block truncate">{project.name}</span>
+                  </button>
+                ))}
+              </div>
               {projects.length === 0 && (
                 <div className="px-3 py-2 text-sm text-neutral-500">
                   No projects yet

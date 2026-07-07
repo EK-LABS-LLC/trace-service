@@ -1,4 +1,13 @@
-import type { Trace, NewTrace, Session, NewSession, Span, NewSpan } from "./schema";
+import type {
+  Trace,
+  NewTrace,
+  TraceSummary,
+  NewTraceSummary,
+  Session,
+  NewSession,
+  Span,
+  NewSpan,
+} from "./schema";
 
 /**
  * Query filters for trace lookups.
@@ -22,13 +31,49 @@ export interface TraceQueryResult {
   total: number;
 }
 
+export interface TraceSummaryQueryFilters {
+  sessionId?: string;
+  source?: string;
+  status?: "success" | "error";
+  dateFrom?: Date;
+  dateTo?: Date;
+  limit?: number;
+  offset?: number;
+  sort?: "recent" | "oldest" | "duration" | "errors" | "volume";
+}
+
+export interface TraceSummaryQueryResult {
+  traces: TraceSummary[];
+  total: number;
+}
+
+export interface SessionSummaryRow {
+  sessionId: string;
+  firstTimestamp: Date | string | number;
+  lastTimestamp: Date | string | number;
+  traceCount: number;
+  spanCount: number;
+  errorCount: number;
+  durationMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  source: string | null;
+}
+
+export interface SessionSummaryQueryResult {
+  sessions: SessionSummaryRow[];
+  total: number;
+}
+
 /**
  * Query filters for span lookups.
  */
 export interface SpanQueryFilters {
   sessionId?: string;
-  source?: "claude_code" | "codex" | "opencode" | "openclaw";
-  kind?: "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification";
+  traceId?: string;
+  source?: "claude_code" | "codex" | "opencode" | "openclaw" | "sdk" | "otel";
+  kind?: "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification" | "llm_call";
   toolName?: string;
   status?: "success" | "error";
   dateFrom?: Date;
@@ -117,6 +162,32 @@ export interface StorageAdapter {
   countTraces(projectId: string, filters?: TraceQueryFilters): Promise<number>;
 
   /**
+   * Insert or update a trace summary derived from spans.
+   */
+  upsertTraceSummary(projectId: string, summary: NewTraceSummary): Promise<TraceSummary>;
+
+  /**
+   * Get a trace summary by OTel trace ID.
+   */
+  getTraceSummary(traceId: string, projectId: string): Promise<TraceSummary | null>;
+
+  /**
+   * Query trace summaries for a project.
+   */
+  queryTraceSummaries(
+    projectId: string,
+    filters?: TraceSummaryQueryFilters
+  ): Promise<TraceSummaryQueryResult>;
+
+  /**
+   * Query Pulse session summaries derived from trace summaries.
+   */
+  querySessionSummaries(
+    projectId: string,
+    filters?: TraceSummaryQueryFilters
+  ): Promise<SessionSummaryQueryResult>;
+
+  /**
    * Insert or update a session.
    * If a session with the given ID exists, update its metadata.
    * Otherwise, create a new session.
@@ -132,6 +203,20 @@ export interface StorageAdapter {
    * Get all spans for a session, ordered by timestamp ascending.
    */
   getSessionSpans(sessionId: string, projectId: string): Promise<Span[]>;
+
+  /**
+   * Get all spans for an OTel trace, ordered by timestamp ascending.
+   */
+  getTraceSpans(traceId: string, projectId: string): Promise<Span[]>;
+
+  /**
+   * Get the latest trace summary in a session/source, used by legacy span adapters.
+   */
+  getLatestTraceSummaryForSession(
+    sessionId: string,
+    projectId: string,
+    source?: string
+  ): Promise<TraceSummary | null>;
 
   /**
    * Insert a new span into storage.

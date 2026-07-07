@@ -9,8 +9,10 @@ import { auth } from "./auth/auth";
 import {
   handleBatchTraces,
   handleAsyncTrace,
+  handleOtlpJsonTraces,
   getTraces,
   getTraceById,
+  getTraceSpansById,
 } from "./routes/traces";
 import {
   handleBatchSpans,
@@ -87,9 +89,11 @@ export function createApp(): Hono {
 
   app.post("/v1/auth/login", isAuthenticated);
 
+  app.post("/v1/traces", authMiddleware, handleOtlpJsonTraces);
   app.post("/v1/traces/batch", authMiddleware, handleBatchTraces);
   app.post("/v1/traces/async", authMiddleware, handleAsyncTrace);
   app.get("/v1/traces", authMiddleware, getTraces);
+  app.get("/v1/traces/:id/spans", authMiddleware, getTraceSpansById);
   app.get("/v1/traces/:id", authMiddleware, getTraceById);
   app.post("/v1/spans/batch", authMiddleware, handleBatchSpans);
   app.post("/v1/spans/async", authMiddleware, handleAsyncSpan);

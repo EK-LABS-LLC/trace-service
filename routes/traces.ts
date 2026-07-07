@@ -6,6 +6,26 @@ import { traceQuerySchema, batchTraceSchema } from "../shared/validation";
 import type { TraceInput } from "../shared/validation";
 import { getEventBus } from "../event-bus/client";
 import { buildTraceIngestSubject } from "../event-bus/subjects";
+import { ingestOtlpJson } from "../services/otel";
+
+export async function handleOtlpJsonTraces(c: Context): Promise<Response> {
+  const projectId = c.get("projectId") as string;
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  try {
+    const result = await ingestOtlpJson(projectId, body, storage);
+    return c.json(result, 202);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid OTLP JSON payload";
+    return c.json({ error: message }, 400);
+  }
+}
 
 /**
  * Handler for POST /v1/traces/batch
@@ -218,4 +238,16 @@ export async function getTraceById(c: Context): Promise<Response> {
     `[traces] GET /v1/traces/:id - SUCCESS - project=${projectId}, trace_id=${traceId}, status=${trace.status}, provider=${trace.provider}`,
   );
   return c.json(trace, 200);
+}
+
+export async function getTraceSpansById(c: Context): Promise<Response> {
+  const projectId = c.get("projectId") as string;
+  const traceId = c.req.param("id");
+  const spans = await storage.getTraceSpans(traceId, projectId);
+
+  if (spans.length === 0) {
+    return c.json({ error: "Trace not found" }, 404);
+  }
+
+  return c.json({ traceId, spans, total: spans.length }, 200);
 }

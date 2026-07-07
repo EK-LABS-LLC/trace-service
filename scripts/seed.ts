@@ -45,6 +45,39 @@ const DEFAULT_MODEL_COST_RATE: ModelCostRate = {
   outputPer1kCents: 0.2,
 };
 
+const SESSION_NAMES = [
+  "Checkout refund investigation",
+  "Support ticket summarizer",
+  "Agent tool reliability sweep",
+  "Contract clause extraction",
+  "Eval run: billing classifier",
+  "Release notes drafting",
+  "Dashboard regression triage",
+  "Knowledge base answer quality",
+] as const;
+
+const USER_PROMPTS = [
+  "Summarize the customer refund timeline and identify the failing handoff.",
+  "Compare the retrieved policy snippets and draft a concise support reply.",
+  "Investigate why the dashboard session detail page is hard to scan.",
+  "Extract the renewal terms and flag risky language for legal review.",
+  "Classify this billing conversation and explain the confidence score.",
+  "Generate release notes from the merged pull requests and highlight risks.",
+  "Find the agent tool call that caused the regression and suggest a fix.",
+  "Evaluate whether the answer cites the correct source documents.",
+] as const;
+
+const TRACE_NAMES = [
+  "Classify support intent",
+  "Draft answer with citations",
+  "Inspect failing session timeline",
+  "Extract contract obligations",
+  "Score eval case output",
+  "Generate release note summary",
+  "Run agent troubleshooting turn",
+  "Validate retrieved context",
+] as const;
+
 function getArg(name: string): string | undefined {
   const key = `--${name}=`;
   const found = Bun.argv.find((a) => a.startsWith(key));
@@ -291,11 +324,15 @@ async function seedData(args: Args, apiKey: string): Promise<{ traces: number; s
 
   for (let i = 0; i < args.sessions; i++) {
     const sessionId = crypto.randomUUID();
+    const sessionName = randomItem(SESSION_NAMES);
+    const sessionPrompt = randomItem(USER_PROMPTS);
     let currentTs = randomInt(dateFrom, Date.now());
 
     for (let j = 0; j < args.tracesPerSession; j++) {
       const provider = randomItem(PROVIDERS);
       const model = randomItem(MODELS[provider]);
+      const prompt = j === 0 ? sessionPrompt : randomItem(USER_PROMPTS);
+      const traceName = randomItem(TRACE_NAMES);
       const isError = Math.random() < 0.06;
       const inputTokens = randomInt(80, 2200);
       const outputTokens = isError ? 0 : randomInt(50, 1800);
@@ -312,30 +349,51 @@ async function seedData(args: Args, apiKey: string): Promise<{ traces: number; s
         status: isError ? "error" : "success",
         request_body: {
           model,
-          messages: [{ role: "user", content: "Seeded request payload" }],
+          messages: [{ role: "user", content: prompt }],
         },
         response_body: isError ? undefined : { id: crypto.randomUUID(), choices: [] },
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cost_cents: costCents,
-        output_text: isError ? undefined : "Seeded model response",
+        output_text: isError ? undefined : `Seeded response for: ${prompt}`,
         finish_reason: isError ? undefined : "stop",
         error: isError ? { message: "Seeded synthetic error" } : undefined,
-        metadata: { source: "seed-script", sessionIndex: i },
+        metadata: {
+          source: "seed-script",
+          sessionIndex: i,
+          "pulse.session.name": sessionName,
+          "pulse.trace.name": traceName,
+          "pulse.prompt.preview": prompt,
+        },
       });
       totalTraces++;
       currentTs += randomInt(500, 8000);
     }
 
     for (let k = 0; k < args.spansPerSession; k++) {
-      const kind = randomItem([
-        "tool_use",
-        "agent_run",
-        "session",
-        "user_prompt",
-        "notification",
-      ] as const);
+      const kind =
+        k === 0
+          ? "user_prompt"
+          : randomItem([
+              "tool_use",
+              "agent_run",
+              "session",
+              "llm_response",
+              "notification",
+            ] as const);
       const isError = Math.random() < 0.04;
+      const eventType =
+        kind === "tool_use"
+          ? "post_tool_use"
+          : kind === "agent_run"
+            ? "subagent_stop"
+            : kind === "user_prompt"
+              ? "user_prompt_submit"
+              : kind === "llm_response"
+                ? "assistant_message"
+                : kind === "session"
+                  ? "stop"
+                  : "notification";
 
       spansBuffer.push({
         span_id: crypto.randomUUID(),
@@ -344,16 +402,7 @@ async function seedData(args: Args, apiKey: string): Promise<{ traces: number; s
         duration_ms: randomInt(5, 3000),
         source: "claude_code",
         kind,
-        event_type:
-          kind === "tool_use"
-            ? "post_tool_use"
-            : kind === "agent_run"
-              ? "subagent_stop"
-              : kind === "user_prompt"
-                ? "user_message"
-                : kind === "session"
-                  ? "session_update"
-                  : "notify",
+        event_type: eventType,
         status: isError ? "error" : "success",
         tool_use_id: kind === "tool_use" ? crypto.randomUUID() : undefined,
         tool_name: kind === "tool_use" ? randomItem(["Bash", "Read", "Edit"]) : undefined,
@@ -363,7 +412,13 @@ async function seedData(args: Args, apiKey: string): Promise<{ traces: number; s
         cwd: "/workspace",
         model: randomItem(["gpt-5", "gpt-4o", "claude-3-sonnet"]),
         agent_name: kind === "agent_run" ? randomItem(["Plan", "Explore", "Code"]) : undefined,
-        metadata: { source: "seed-script", sessionIndex: i },
+        metadata: {
+          source: "seed-script",
+          sessionIndex: i,
+          "pulse.session.name": sessionName,
+          "pulse.trace.name": k === 0 ? "Agent turn: investigate user request" : undefined,
+          prompt: kind === "user_prompt" ? sessionPrompt : undefined,
+        },
       });
       totalSpans++;
       currentTs += randomInt(200, 5000);

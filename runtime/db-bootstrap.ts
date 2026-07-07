@@ -95,11 +95,44 @@ const SQLITE_BOOTSTRAP_STATEMENTS: readonly string[] = [
   );`,
   `CREATE INDEX IF NOT EXISTS "traces_project_timestamp_idx" ON "traces" ("project_id", "timestamp");`,
   `CREATE INDEX IF NOT EXISTS "traces_project_session_idx" ON "traces" ("project_id", "session_id");`,
+  `CREATE TABLE IF NOT EXISTS "trace_summaries" (
+    "trace_id" text PRIMARY KEY NOT NULL,
+    "project_id" text NOT NULL,
+    "session_id" text,
+    "root_span_id" text,
+    "name" text NOT NULL,
+    "source" text NOT NULL,
+    "started_at" integer NOT NULL,
+    "ended_at" integer NOT NULL,
+    "duration_ms" integer DEFAULT 0 NOT NULL,
+    "status" text NOT NULL,
+    "span_count" integer DEFAULT 0 NOT NULL,
+    "error_count" integer DEFAULT 0 NOT NULL,
+    "input_tokens" integer DEFAULT 0 NOT NULL,
+    "output_tokens" integer DEFAULT 0 NOT NULL,
+    "cost_cents" real DEFAULT 0 NOT NULL,
+    "attributes" text,
+    FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade
+  );`,
+  `CREATE INDEX IF NOT EXISTS "trace_summaries_project_started_idx" ON "trace_summaries" ("project_id", "started_at");`,
+  `CREATE INDEX IF NOT EXISTS "trace_summaries_project_session_idx" ON "trace_summaries" ("project_id", "session_id");`,
   `CREATE TABLE IF NOT EXISTS "spans" (
     "span_id" text PRIMARY KEY NOT NULL,
     "project_id" text NOT NULL,
+    "trace_id" text,
     "session_id" text NOT NULL,
     "parent_span_id" text,
+    "name" text,
+    "otel_kind" text,
+    "start_time_unix_nano" text,
+    "end_time_unix_nano" text,
+    "status_code" text,
+    "status_message" text,
+    "attributes" text,
+    "events" text,
+    "links" text,
+    "resource" text,
+    "scope" text,
     "timestamp" integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
     "duration_ms" integer,
     "source" text NOT NULL,
@@ -120,6 +153,7 @@ const SQLITE_BOOTSTRAP_STATEMENTS: readonly string[] = [
   );`,
   `CREATE INDEX IF NOT EXISTS "spans_project_timestamp_idx" ON "spans" ("project_id", "timestamp");`,
   `CREATE INDEX IF NOT EXISTS "spans_project_session_idx" ON "spans" ("project_id", "session_id");`,
+  `CREATE INDEX IF NOT EXISTS "spans_project_trace_idx" ON "spans" ("project_id", "trace_id");`,
   `CREATE INDEX IF NOT EXISTS "spans_project_kind_idx" ON "spans" ("project_id", "kind");`,
   `CREATE TABLE IF NOT EXISTS "user_projects" (
     "id" text PRIMARY KEY NOT NULL,
@@ -229,11 +263,44 @@ const POSTGRES_BOOTSTRAP_STATEMENTS: readonly string[] = [
   );`,
   `CREATE INDEX IF NOT EXISTS "traces_project_timestamp_idx" ON "traces" ("project_id", "timestamp");`,
   `CREATE INDEX IF NOT EXISTS "traces_project_session_idx" ON "traces" ("project_id", "session_id");`,
+  `CREATE TABLE IF NOT EXISTS "trace_summaries" (
+    "trace_id" text PRIMARY KEY NOT NULL,
+    "project_id" text NOT NULL,
+    "session_id" text,
+    "root_span_id" text,
+    "name" text NOT NULL,
+    "source" text NOT NULL,
+    "started_at" timestamp with time zone NOT NULL,
+    "ended_at" timestamp with time zone NOT NULL,
+    "duration_ms" integer DEFAULT 0 NOT NULL,
+    "status" text NOT NULL,
+    "span_count" integer DEFAULT 0 NOT NULL,
+    "error_count" integer DEFAULT 0 NOT NULL,
+    "input_tokens" integer DEFAULT 0 NOT NULL,
+    "output_tokens" integer DEFAULT 0 NOT NULL,
+    "cost_cents" double precision DEFAULT 0 NOT NULL,
+    "attributes" jsonb,
+    FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade
+  );`,
+  `CREATE INDEX IF NOT EXISTS "trace_summaries_project_started_idx" ON "trace_summaries" ("project_id", "started_at");`,
+  `CREATE INDEX IF NOT EXISTS "trace_summaries_project_session_idx" ON "trace_summaries" ("project_id", "session_id");`,
   `CREATE TABLE IF NOT EXISTS "spans" (
     "span_id" text PRIMARY KEY NOT NULL,
     "project_id" text NOT NULL,
+    "trace_id" text,
     "session_id" text NOT NULL,
     "parent_span_id" text,
+    "name" text,
+    "otel_kind" text,
+    "start_time_unix_nano" text,
+    "end_time_unix_nano" text,
+    "status_code" text,
+    "status_message" text,
+    "attributes" jsonb,
+    "events" jsonb,
+    "links" jsonb,
+    "resource" jsonb,
+    "scope" jsonb,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
     "duration_ms" integer,
     "source" text NOT NULL,
@@ -254,6 +321,7 @@ const POSTGRES_BOOTSTRAP_STATEMENTS: readonly string[] = [
   );`,
   `CREATE INDEX IF NOT EXISTS "spans_project_timestamp_idx" ON "spans" ("project_id", "timestamp");`,
   `CREATE INDEX IF NOT EXISTS "spans_project_session_idx" ON "spans" ("project_id", "session_id");`,
+  `CREATE INDEX IF NOT EXISTS "spans_project_trace_idx" ON "spans" ("project_id", "trace_id");`,
   `CREATE INDEX IF NOT EXISTS "spans_project_kind_idx" ON "spans" ("project_id", "kind");`,
   `CREATE TABLE IF NOT EXISTS "user_projects" (
     "id" text PRIMARY KEY NOT NULL,
@@ -271,10 +339,58 @@ const POSTGRES_BOOTSTRAP_STATEMENTS: readonly string[] = [
 
 const POSTGRES_BOOTSTRAP_LOCK_KEY = "pulse_schema_bootstrap_v1";
 
+const SQLITE_SPAN_COLUMNS: readonly Array<{ name: string; ddl: string }> = [
+  { name: "trace_id", ddl: `ALTER TABLE "spans" ADD COLUMN "trace_id" text;` },
+  { name: "name", ddl: `ALTER TABLE "spans" ADD COLUMN "name" text;` },
+  { name: "otel_kind", ddl: `ALTER TABLE "spans" ADD COLUMN "otel_kind" text;` },
+  {
+    name: "start_time_unix_nano",
+    ddl: `ALTER TABLE "spans" ADD COLUMN "start_time_unix_nano" text;`,
+  },
+  {
+    name: "end_time_unix_nano",
+    ddl: `ALTER TABLE "spans" ADD COLUMN "end_time_unix_nano" text;`,
+  },
+  { name: "status_code", ddl: `ALTER TABLE "spans" ADD COLUMN "status_code" text;` },
+  { name: "status_message", ddl: `ALTER TABLE "spans" ADD COLUMN "status_message" text;` },
+  { name: "attributes", ddl: `ALTER TABLE "spans" ADD COLUMN "attributes" text;` },
+  { name: "events", ddl: `ALTER TABLE "spans" ADD COLUMN "events" text;` },
+  { name: "links", ddl: `ALTER TABLE "spans" ADD COLUMN "links" text;` },
+  { name: "resource", ddl: `ALTER TABLE "spans" ADD COLUMN "resource" text;` },
+  { name: "scope", ddl: `ALTER TABLE "spans" ADD COLUMN "scope" text;` },
+];
+
+const POSTGRES_SPAN_COLUMN_STATEMENTS: readonly string[] = [
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "trace_id" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "name" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "otel_kind" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "start_time_unix_nano" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "end_time_unix_nano" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "status_code" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "status_message" text;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "attributes" jsonb;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "events" jsonb;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "links" jsonb;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "resource" jsonb;`,
+  `ALTER TABLE "spans" ADD COLUMN IF NOT EXISTS "scope" jsonb;`,
+];
+
 export function bootstrapSqliteSchema(sqlite: BunSqliteDatabase): void {
   for (const statement of SQLITE_BOOTSTRAP_STATEMENTS) {
     sqlite.exec(statement);
   }
+
+  const existingSpanColumns = new Set(
+    sqlite.query(`PRAGMA table_info("spans")`).all().map((row: any) => String(row.name)),
+  );
+  for (const column of SQLITE_SPAN_COLUMNS) {
+    if (!existingSpanColumns.has(column.name)) {
+      sqlite.exec(column.ddl);
+    }
+  }
+  sqlite.exec(
+    `CREATE INDEX IF NOT EXISTS "spans_project_trace_idx" ON "spans" ("project_id", "trace_id");`,
+  );
 }
 
 export async function bootstrapPostgresSchema(sql: Sql): Promise<void> {
@@ -283,6 +399,12 @@ export async function bootstrapPostgresSchema(sql: Sql): Promise<void> {
     for (const statement of POSTGRES_BOOTSTRAP_STATEMENTS) {
       await sql.unsafe(statement);
     }
+    for (const statement of POSTGRES_SPAN_COLUMN_STATEMENTS) {
+      await sql.unsafe(statement);
+    }
+    await sql.unsafe(
+      `CREATE INDEX IF NOT EXISTS "spans_project_trace_idx" ON "spans" ("project_id", "trace_id");`,
+    );
   } finally {
     await sql`SELECT pg_advisory_unlock(hashtext(${POSTGRES_BOOTSTRAP_LOCK_KEY}))`;
   }

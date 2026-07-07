@@ -23,6 +23,12 @@ import { handleGetSessionTraces, handleGetSessionSpans } from "./sessions";
 import { handleGetAnalytics, handleGetSpanAnalytics } from "./analytics";
 import { getAgentSessions } from "./agent-sessions";
 import {
+  getDashboardSessions,
+  getDashboardSessionTraces,
+  getDashboardTrace,
+  getDashboardTraceSpans,
+} from "./otel-dashboard";
+import {
   handleBatchSpans,
   handleAsyncSpan,
   getSpans,
@@ -74,10 +80,23 @@ dashboard.post(
 dashboard.post("/traces/batch", projectContextMiddleware, handleBatchTraces);
 dashboard.get("/traces", projectContextMiddleware, getTraces);
 dashboard.get("/traces/:id", projectContextMiddleware, getTraceById);
+dashboard.get("/otel/traces/:id", projectContextMiddleware, getDashboardTrace);
+dashboard.get("/otel/traces/:traceId/spans", projectContextMiddleware, getDashboardTraceSpans);
+dashboard.get("/otel/sessions", projectContextMiddleware, getDashboardSessions);
+dashboard.get(
+  "/otel/sessions/:id/traces",
+  projectContextMiddleware,
+  getDashboardSessionTraces,
+);
 dashboard.get(
   "/sessions/:id",
   projectContextMiddleware,
   handleGetSessionTraces,
+);
+dashboard.get(
+  "/sessions/:id/traces",
+  projectContextMiddleware,
+  getDashboardSessionTraces,
 );
 dashboard.get(
   "/sessions/:id/spans",

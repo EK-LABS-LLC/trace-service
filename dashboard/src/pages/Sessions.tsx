@@ -1,15 +1,10 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
-import type { Trace } from "../lib/apiClient";
+import { useSearchParams } from "react-router-dom";
 import SessionsTable from "../components/sessions/SessionsTable";
-import AgentSessionsTable from "../components/sessions/AgentSessionsTable";
-import type { SessionSummary } from "../components/sessions/SessionsTable";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
-import { useAgentSessionsQuery, useTracesQuery } from "../api";
+import { useOTelSessionsQuery } from "../api";
 import { useProject } from "../hooks/useProject";
-import { summarizeApiAgentSession } from "../lib/agentSessions";
 
-type ViewTab = "llm" | "agents";
 type DateRange = "all" | "24h" | "7d" | "30d";
 type SessionSort = "recent" | "oldest" | "duration" | "errors" | "volume";
 
@@ -36,12 +31,7 @@ const SearchIcon = () => (
 );
 
 const ChevronDownIcon = () => (
-  <svg
-    className="w-3.5 h-3.5 text-neutral-500"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
+  <svg className="w-3.5 h-3.5 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
   </svg>
 );
@@ -108,9 +98,7 @@ function ToolbarMenu<T extends string>({
       }
     };
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
+      if (event.key === "Escape") setOpen(false);
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
@@ -134,11 +122,7 @@ function ToolbarMenu<T extends string>({
         {icon}
         {prefix ? <span className="text-neutral-500">{prefix}</span> : null}
         <span className="whitespace-nowrap text-neutral-300">{selected?.label}</span>
-        <span
-          className={`text-neutral-500 transition-transform group-hover:text-neutral-400 ${
-            open ? "rotate-180" : ""
-          }`}
-        >
+        <span className={`text-neutral-500 transition-transform group-hover:text-neutral-400 ${open ? "rotate-180" : ""}`}>
           <ChevronDownIcon />
         </span>
       </button>
@@ -180,10 +164,6 @@ function ToolbarMenu<T extends string>({
   );
 }
 
-function validTab(value: string | null): ViewTab {
-  return value === "agents" ? "agents" : "llm";
-}
-
 function validRange(value: string | null): DateRange {
   return value === "24h" || value === "7d" || value === "30d" ? value : "all";
 }
@@ -198,66 +178,17 @@ function getDateRangeParams(range: DateRange): { date_from?: string; date_to?: s
   if (range === "all") return {};
 
   const from = new Date();
-  if (range === "24h") {
-    from.setHours(from.getHours() - 24);
-  } else if (range === "7d") {
-    from.setDate(from.getDate() - 7);
-  } else {
-    from.setDate(from.getDate() - 30);
-  }
+  if (range === "24h") from.setHours(from.getHours() - 24);
+  else if (range === "7d") from.setDate(from.getDate() - 7);
+  else from.setDate(from.getDate() - 30);
 
-  return { date_from: from.toISOString() };
-}
-
-function groupTracesIntoSessions(traces: Trace[]): SessionSummary[] {
-  const sessionMap = new Map<string, Trace[]>();
-
-  for (const trace of traces) {
-    if (!trace.sessionId) continue;
-    const existing = sessionMap.get(trace.sessionId) || [];
-    existing.push(trace);
-    sessionMap.set(trace.sessionId, existing);
-  }
-
-  const sessions: SessionSummary[] = [];
-  for (const [session_id, sessionTraces] of sessionMap) {
-    const sorted = sessionTraces.sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    const totalTokens = sorted.reduce(
-      (sum, t) => sum + (t.inputTokens || 0) + (t.outputTokens || 0),
-      0
-    );
-    const totalCost = sorted.reduce((sum, t) => sum + (t.costCents || 0), 0);
-    const errorCount = sorted.filter((t) => t.status === "error").length;
-
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    if (!first || !last) continue;
-
-    sessions.push({
-      session_id,
-      first_trace_time: first.timestamp,
-      last_trace_time: last.timestamp,
-      trace_count: sorted.length,
-      total_tokens: totalTokens,
-      total_cost_cents: totalCost,
-      error_count: errorCount,
-      user: first.metadata?.user as string | undefined,
-    });
-  }
-
-  return sessions.sort(
-    (a, b) => new Date(b.first_trace_time).getTime() - new Date(a.first_trace_time).getTime()
-  );
+  return { date_from: from.toISOString(), date_to: new Date().toISOString() };
 }
 
 export default function Sessions() {
   const { selectedProject } = useProject();
-  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const activeTab = validTab(searchParams.get("tab"));
   const dateRange = validRange(searchParams.get("range"));
   const sort = validSort(searchParams.get("sort"));
   const dateParams = useMemo(() => getDateRangeParams(dateRange), [dateRange]);
@@ -266,125 +197,36 @@ export default function Sessions() {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
+    next.delete("tab");
     setSearchParams(next, { replace: true });
   };
 
-  const selectTab = (tab: ViewTab) => {
-    updateSearchParam("tab", tab === "agents" ? "agents" : null);
-  };
-
-  const selectDateRange = (range: DateRange) => {
-    updateSearchParam("range", range === "all" ? null : range);
-  };
-
-  const selectSort = (nextSort: SessionSort) => {
-    updateSearchParam("sort", nextSort === "recent" ? null : nextSort);
-  };
-
-  // LLM sessions (from traces)
-  const sessionsQuery = useTracesQuery("sessions-source-traces", selectedProject?.id, {
+  const sessionsQuery = useOTelSessionsQuery("otel-sessions", selectedProject?.id, {
     limit: 500,
+    sort,
     ...dateParams,
   });
 
-  const agentSessionsQuery = useAgentSessionsQuery(
-    "sessions-source-agent-sessions",
-    selectedProject?.id,
-    {
-      limit: 500,
-      sort,
-      ...dateParams,
-    }
-  );
-
-  const llmSessions = groupTracesIntoSessions(sessionsQuery.data?.traces ?? []);
-  const agentSessions = agentSessionsQuery.data?.sessions.map(summarizeApiAgentSession) ?? [];
-
-  const llmLoading = sessionsQuery.isPending;
-  const agentLoading = agentSessionsQuery.isPending;
-  const llmError = sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
-  const agentError =
-    agentSessionsQuery.error instanceof Error ? agentSessionsQuery.error.message : null;
-
-  const searchedLlmSessions = searchQuery
-    ? llmSessions.filter(
-        (s) =>
-          s.session_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (s.user && s.user.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : llmSessions;
-
-  const filteredLlmSessions = [...searchedLlmSessions].sort((a, b) => {
-    switch (sort) {
-      case "oldest":
-        return new Date(a.first_trace_time).getTime() - new Date(b.first_trace_time).getTime();
-      case "duration":
-        return (
-          new Date(b.last_trace_time).getTime() -
-          new Date(b.first_trace_time).getTime() -
-          (new Date(a.last_trace_time).getTime() - new Date(a.first_trace_time).getTime())
-        );
-      case "errors":
-        return b.error_count - a.error_count;
-      case "volume":
-        return b.trace_count - a.trace_count;
-      case "recent":
-      default:
-        return new Date(b.last_trace_time).getTime() - new Date(a.last_trace_time).getTime();
-    }
-  });
-
-  const filteredAgentSessions = searchQuery
-    ? agentSessions.filter((s) => {
+  const sessions = sessionsQuery.data?.sessions ?? [];
+  const filteredSessions = searchQuery
+    ? sessions.filter((session) => {
         const query = searchQuery.toLowerCase();
-        return [
-          s.displayName,
-          s.subtitle,
-          s.sessionId,
-          s.shortId,
-          s.sourceLabel,
-          s.cwd,
-          s.model,
-          s.firstPrompt,
-        ].some((value) => value?.toLowerCase().includes(query));
+        return [session.sessionId, session.source ?? ""].some((value) =>
+          value.toLowerCase().includes(query)
+        );
       })
-    : agentSessions;
+    : sessions;
 
-  const total =
-    activeTab === "llm"
-      ? llmSessions.length
-      : (agentSessionsQuery.data?.total ?? agentSessions.length);
-  const error = activeTab === "llm" ? llmError : agentError;
-  const returnTo = `${location.pathname}${location.search}`;
+  const total = sessionsQuery.data?.total ?? sessions.length;
+  const error = sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
+  const loading = sessionsQuery.isPending;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <header className="h-14 flex items-center justify-between px-6 border-b border-neutral-800 flex-shrink-0 bg-neutral-950">
         <div className="flex items-center gap-4">
           <h1 className="text-sm font-medium">Sessions</h1>
-          {/* Tab Switcher */}
-          <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-sm p-0.5">
-            <button
-              onClick={() => selectTab("llm")}
-              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                activeTab === "llm"
-                  ? "bg-neutral-800 text-white"
-                  : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              LLM
-            </button>
-            <button
-              onClick={() => selectTab("agents")}
-              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                activeTab === "agents"
-                  ? "bg-neutral-800 text-white"
-                  : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Agents
-            </button>
-          </div>
+          <span className="text-xs text-neutral-500">Session &gt; Traces &gt; Spans</span>
           <span className="text-xs text-neutral-500">{total.toLocaleString()} total</span>
         </div>
         <div className="flex items-center gap-3">
@@ -396,7 +238,7 @@ export default function Sessions() {
               value: range,
               label: DATE_RANGE_LABELS[range],
             }))}
-            onChange={selectDateRange}
+            onChange={(range) => updateSearchParam("range", range === "all" ? null : range)}
           />
           <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-neutral-500">
             <span className="relative flex h-2 w-2">
@@ -415,13 +257,9 @@ export default function Sessions() {
               <SearchIcon />
               <input
                 type="text"
-                placeholder={
-                  activeTab === "agents"
-                    ? "Search by name, folder, model, or session ID..."
-                    : "Search by session ID or user..."
-                }
+                placeholder="Search by session ID or source..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="flex-1 bg-transparent text-sm text-neutral-300 placeholder:text-neutral-500 outline-none"
               />
             </div>
@@ -435,84 +273,40 @@ export default function Sessions() {
               value: sortOption,
               label: SORT_LABELS[sortOption],
             }))}
-            onChange={selectSort}
+            onChange={(nextSort) => updateSearchParam("sort", nextSort === "recent" ? null : nextSort)}
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-        {error && (
+        {error ? (
           <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded">
             <div className="flex items-center justify-between gap-4">
               <p className="text-rose-400 text-sm">{error}</p>
               <button
-                onClick={() => {
-                  if (activeTab === "llm") sessionsQuery.refetch();
-                  else agentSessionsQuery.refetch();
-                }}
+                type="button"
+                onClick={() => sessionsQuery.refetch()}
                 className="text-sm text-accent hover:underline whitespace-nowrap"
               >
                 Retry
               </button>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {!error && activeTab === "llm" && (
-          <>
-            {llmLoading ? (
-              <div className="max-w-5xl mx-auto">
-                <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
-                  <TableSkeleton rows={10} columns={7} />
-                </div>
-              </div>
-            ) : (
-              <div className="max-w-5xl mx-auto">
-                <SessionsTable sessions={filteredLlmSessions} />
-              </div>
-            )}
-          </>
-        )}
+        {!error && loading ? (
+          <div className="max-w-6xl mx-auto">
+            <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
+              <TableSkeleton rows={10} columns={9} />
+            </div>
+          </div>
+        ) : null}
 
-        {!error && activeTab === "agents" && (
-          <>
-            {agentLoading ? (
-              <div className="max-w-5xl mx-auto">
-                <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
-                  <TableSkeleton rows={10} columns={6} />
-                </div>
-              </div>
-            ) : filteredAgentSessions.length === 0 ? (
-              <div className="max-w-5xl mx-auto">
-                <div className="bg-neutral-900 border border-neutral-800 rounded p-8 text-center">
-                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-neutral-800 flex items-center justify-center">
-                    <svg
-                      className="w-6 h-6 text-neutral-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-medium text-neutral-300 mb-2">No Agent Sessions</h3>
-                  <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                    Agent sessions with span data will appear here when available.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="max-w-5xl mx-auto">
-                <AgentSessionsTable sessions={filteredAgentSessions} returnTo={returnTo} />
-              </div>
-            )}
-          </>
-        )}
+        {!error && !loading ? (
+          <div className="max-w-6xl mx-auto">
+            <SessionsTable sessions={filteredSessions} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

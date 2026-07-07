@@ -80,6 +80,34 @@ export const traces = sqliteTable(
   ],
 );
 
+export const traceSummaries = sqliteTable(
+  "trace_summaries",
+  {
+    traceId: text("trace_id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    sessionId: text("session_id"),
+    rootSpanId: text("root_span_id"),
+    name: text("name").notNull(),
+    source: text("source").notNull(),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+    endedAt: integer("ended_at", { mode: "timestamp_ms" }).notNull(),
+    durationMs: integer("duration_ms").notNull().default(0),
+    status: text("status").notNull(),
+    spanCount: integer("span_count").notNull().default(0),
+    errorCount: integer("error_count").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    costCents: real("cost_cents").notNull().default(0),
+    attributes: text("attributes", { mode: "json" }),
+  },
+  (table) => [
+    index("trace_summaries_project_started_idx").on(table.projectId, table.startedAt),
+    index("trace_summaries_project_session_idx").on(table.projectId, table.sessionId),
+  ],
+);
+
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 
@@ -119,6 +147,8 @@ export type NewUserProject = typeof userProjects.$inferInsert;
 
 export type Trace = typeof traces.$inferSelect;
 export type NewTrace = typeof traces.$inferInsert;
+export type TraceSummary = typeof traceSummaries.$inferSelect;
+export type NewTraceSummary = typeof traceSummaries.$inferInsert;
 
 export const spans = sqliteTable(
   "spans",
@@ -127,8 +157,20 @@ export const spans = sqliteTable(
     projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
+    traceId: text("trace_id"),
     sessionId: text("session_id").notNull(),
     parentSpanId: text("parent_span_id"),
+    name: text("name"),
+    otelKind: text("otel_kind"),
+    startTimeUnixNano: text("start_time_unix_nano"),
+    endTimeUnixNano: text("end_time_unix_nano"),
+    statusCode: text("status_code"),
+    statusMessage: text("status_message"),
+    attributes: text("attributes", { mode: "json" }),
+    events: text("events", { mode: "json" }),
+    links: text("links", { mode: "json" }),
+    resource: text("resource", { mode: "json" }),
+    scope: text("scope", { mode: "json" }),
     timestamp: integer("timestamp", { mode: "timestamp_ms" }).defaultNow().notNull(),
     durationMs: integer("duration_ms"),
     source: text("source").notNull(),
@@ -149,6 +191,7 @@ export const spans = sqliteTable(
   (table) => [
     index("spans_project_timestamp_idx").on(table.projectId, table.timestamp),
     index("spans_project_session_idx").on(table.projectId, table.sessionId),
+    index("spans_project_trace_idx").on(table.projectId, table.traceId),
     index("spans_project_kind_idx").on(table.projectId, table.kind),
   ],
 );

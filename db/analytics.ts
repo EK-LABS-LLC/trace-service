@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import type { Database } from "./index";
 import { getDbDialect } from "./index";
-import { traces, spans } from "./schema";
+import { traceSummaries, spans } from "./schema";
 import type { GroupBy, SpanAnalyticsGroupBy } from "../shared/validation";
 
 /**
@@ -84,9 +84,10 @@ export interface CostOverTimeByProvider {
  */
 function buildDateConditions(projectId: string, dateRange: DateRange) {
   return and(
-    eq(traces.projectId, projectId),
-    gte(traces.timestamp, dateRange.dateFrom),
-    lte(traces.timestamp, dateRange.dateTo),
+    eq(traceSummaries.projectId, projectId),
+    eq(traceSummaries.source, "sdk"),
+    gte(traceSummaries.startedAt, dateRange.dateFrom),
+    lte(traceSummaries.startedAt, dateRange.dateTo),
   );
 }
 
@@ -102,28 +103,34 @@ function tracePeriodExpr(groupBy?: GroupBy): ReturnType<typeof sql> {
   if (getDbDialect() === "postgres") {
     switch (groupBy) {
       case "hour":
-        return sql`to_char(date_trunc('hour', ${traces.timestamp}), 'YYYY-MM-DD HH24:00:00')`;
+        return sql`to_char(date_trunc('hour', ${traceSummaries.startedAt}), 'YYYY-MM-DD HH24:00:00')`;
       case "model":
-        return sql`${traces.modelRequested}`;
+        return traceAttributeExpr("gen_ai.request.model");
       case "provider":
-        return sql`${traces.provider}`;
+        return traceAttributeExpr("gen_ai.provider.name");
       case "day":
       default:
-        return sql`to_char(date_trunc('day', ${traces.timestamp}), 'YYYY-MM-DD')`;
+        return sql`to_char(date_trunc('day', ${traceSummaries.startedAt}), 'YYYY-MM-DD')`;
     }
   }
 
   switch (groupBy) {
     case "hour":
-      return sql`strftime('%Y-%m-%d %H:00:00', ${traces.timestamp} / 1000, 'unixepoch')`;
+      return sql`strftime('%Y-%m-%d %H:00:00', ${traceSummaries.startedAt} / 1000, 'unixepoch')`;
     case "model":
-      return sql`${traces.modelRequested}`;
+      return traceAttributeExpr("gen_ai.request.model");
     case "provider":
-      return sql`${traces.provider}`;
+      return traceAttributeExpr("gen_ai.provider.name");
     case "day":
     default:
-      return sql`strftime('%Y-%m-%d', ${traces.timestamp} / 1000, 'unixepoch')`;
+      return sql`strftime('%Y-%m-%d', ${traceSummaries.startedAt} / 1000, 'unixepoch')`;
   }
+}
+
+function traceAttributeExpr(key: string): ReturnType<typeof sql> {
+  return getDbDialect() === "postgres"
+    ? sql`${traceSummaries.attributes}->>${key}`
+    : sql`json_extract(${traceSummaries.attributes}, ${`$."${key}"`})`;
 }
 
 function spanPeriodExpr(groupBy: SpanAnalyticsGroupBy = "day"): ReturnType<typeof sql> {
@@ -147,8 +154,8 @@ export async function getTotalCost(
   dateRange: DateRange,
 ): Promise<number> {
   const result = await db
-    .select({ total: sum(traces.costCents) })
-    .from(traces)
+    .select({ total: sum(traceSummaries.costCents) })
+    .from(traceSummaries)
     .where(buildDateConditions(projectId, dateRange));
 
   return Number(result[0]?.total ?? 0);
@@ -164,10 +171,10 @@ export async function getTotalTokens(
 ): Promise<{ inputTokens: number; outputTokens: number; totalTokens: number }> {
   const result = await db
     .select({
-      inputTokens: sum(traces.inputTokens),
-      outputTokens: sum(traces.outputTokens),
+      inputTokens: sum(traceSummaries.inputTokens),
+      outputTokens: sum(traceSummaries.outputTokens),
     })
-    .from(traces)
+    .from(traceSummaries)
     .where(buildDateConditions(projectId, dateRange));
 
   const inputTokens = Number(result[0]?.inputTokens ?? 0);
@@ -189,8 +196,8 @@ export async function getAvgLatency(
   dateRange: DateRange,
 ): Promise<number> {
   const result = await db
-    .select({ avg: avg(traces.latencyMs) })
-    .from(traces)
+    .select({ avg: avg(traceSummaries.durationMs) })
+    .from(traceSummaries)
     .where(buildDateConditions(projectId, dateRange));
 
   return Number(result[0]?.avg ?? 0);
@@ -207,11 +214,11 @@ export async function getErrorRate(
   const conditions = buildDateConditions(projectId, dateRange);
 
   const [totalResult, errorResult] = await Promise.all([
-    db.select({ count: count() }).from(traces).where(conditions),
+    db.select({ count: count() }).from(traceSummaries).where(conditions),
     db
       .select({ count: count() })
-      .from(traces)
-      .where(and(conditions, eq(traces.status, "error"))),
+      .from(traceSummaries)
+      .where(and(conditions, eq(traceSummaries.status, "error"))),
   ]);
 
   const total = totalResult[0]?.count ?? 0;
@@ -240,9 +247,9 @@ export async function getCostOverTime(
   const result = await db
     .select({
       period: periodExpr.as("period"),
-      costCents: sum(traces.costCents).as("cost_cents"),
+      costCents: sum(traceSummaries.costCents).as("cost_cents"),
     })
-    .from(traces)
+    .from(traceSummaries)
     .where(conditions)
     .groupBy(periodExpr)
     .orderBy(periodExpr);
@@ -263,7 +270,7 @@ export async function getTotalRequests(
 ): Promise<number> {
   const result = await db
     .select({ total: count() })
-    .from(traces)
+    .from(traceSummaries)
     .where(buildDateConditions(projectId, dateRange));
 
   return result[0]?.total ?? 0;
@@ -278,12 +285,12 @@ export async function getTotalSessions(
   dateRange: DateRange,
 ): Promise<number> {
   const result = await db
-    .select({ total: sql<number>`COUNT(DISTINCT ${traces.sessionId})` })
-    .from(traces)
+    .select({ total: sql<number>`COUNT(DISTINCT ${traceSummaries.sessionId})` })
+    .from(traceSummaries)
     .where(
       and(
         buildDateConditions(projectId, dateRange),
-        isNotNull(traces.sessionId),
+        isNotNull(traceSummaries.sessionId),
       ),
     );
 
@@ -300,11 +307,11 @@ export async function getErrorCount(
 ): Promise<number> {
   const result = await db
     .select({ total: count() })
-    .from(traces)
+    .from(traceSummaries)
     .where(
       and(
         buildDateConditions(projectId, dateRange),
-        eq(traces.status, "error"),
+        eq(traceSummaries.status, "error"),
       ),
     );
 
@@ -319,16 +326,17 @@ export async function getCostByProvider(
   projectId: string,
   dateRange: DateRange,
 ): Promise<CostByProvider[]> {
+  const providerExpr = traceAttributeExpr("gen_ai.provider.name");
   const result = await db
     .select({
-      provider: traces.provider,
-      costCents: sum(traces.costCents),
+      provider: providerExpr.as("provider"),
+      costCents: sum(traceSummaries.costCents),
       requests: count(),
     })
-    .from(traces)
+    .from(traceSummaries)
     .where(buildDateConditions(projectId, dateRange))
-    .groupBy(traces.provider)
-    .orderBy(desc(sum(traces.costCents)));
+    .groupBy(providerExpr)
+    .orderBy(desc(sum(traceSummaries.costCents)));
 
   return result.map((row: any) => ({
     provider: row.provider,
@@ -347,20 +355,22 @@ export async function getStatsByModel(
   limit: number = 10,
 ): Promise<StatsByModel[]> {
   const conditions = buildDateConditions(projectId, dateRange);
+  const providerExpr = traceAttributeExpr("gen_ai.provider.name");
+  const modelExpr = traceAttributeExpr("gen_ai.request.model");
 
   const result = await db
     .select({
-      provider: traces.provider,
-      model: traces.modelRequested,
+      provider: providerExpr.as("provider"),
+      model: modelExpr.as("model"),
       requests: count(),
-      costCents: sum(traces.costCents),
-      avgLatency: avg(traces.latencyMs),
-      totalTokens: sql<number>`SUM(COALESCE(${traces.inputTokens}, 0) + COALESCE(${traces.outputTokens}, 0))`,
-      errorCount: sql<number>`SUM(CASE WHEN ${traces.status} = 'error' THEN 1 ELSE 0 END)`,
+      costCents: sum(traceSummaries.costCents),
+      avgLatency: avg(traceSummaries.durationMs),
+      totalTokens: sql<number>`SUM(COALESCE(${traceSummaries.inputTokens}, 0) + COALESCE(${traceSummaries.outputTokens}, 0))`,
+      errorCount: sql<number>`SUM(CASE WHEN ${traceSummaries.status} = 'error' THEN 1 ELSE 0 END)`,
     })
-    .from(traces)
+    .from(traceSummaries)
     .where(conditions)
-    .groupBy(traces.provider, traces.modelRequested)
+    .groupBy(providerExpr, modelExpr)
     .orderBy(desc(count()))
     .limit(limit);
 
@@ -387,17 +397,18 @@ export async function getCostOverTimeByProvider(
 ): Promise<CostOverTimeByProvider[]> {
   const conditions = buildDateConditions(projectId, dateRange);
   const periodExpr = tracePeriodExpr(groupBy);
+  const providerExpr = traceAttributeExpr("gen_ai.provider.name");
 
   const result = await db
     .select({
       period: periodExpr.as("period"),
-      provider: traces.provider,
-      costCents: sum(traces.costCents),
+      provider: providerExpr.as("provider"),
+      costCents: sum(traceSummaries.costCents),
     })
-    .from(traces)
+    .from(traceSummaries)
     .where(conditions)
-    .groupBy(periodExpr, traces.provider)
-    .orderBy(periodExpr, traces.provider);
+    .groupBy(periodExpr, providerExpr)
+    .orderBy(periodExpr, providerExpr);
 
   return result.map((row: any) => ({
     period: String(row.period),

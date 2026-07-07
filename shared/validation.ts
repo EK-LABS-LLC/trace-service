@@ -78,7 +78,7 @@ export const spanAnalyticsQuerySchema = z.object({
 /**
  * Source identifies which CLI tool produced the span.
  */
-export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw"]);
+export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw", "sdk", "otel"]);
 
 /**
  * Span kind categorizes what the span represents.
@@ -96,6 +96,7 @@ export const spanKindSchema = z.enum([
   "session",
   "user_prompt",
   "llm_response",
+  "llm_call",
   "notification",
 ]);
 
@@ -110,13 +111,16 @@ export const spanKindSchema = z.enum([
  */
 export const spanSchema = z.object({
   /** Unique identifier for this span. */
-  span_id: z.string().uuid(),
+  span_id: z.string().min(1),
+
+  /** OTel trace identifier. Legacy agent spans may omit this and let the server infer it. */
+  trace_id: z.string().min(1).optional(),
 
   /** Groups spans into a conversation or agent run. Provided by the source tool. */
   session_id: z.string().min(1),
 
   /** Parent span for building hierarchy (agent_run -> tool_use -> nested tool_use). */
-  parent_span_id: z.string().uuid().optional(),
+  parent_span_id: z.string().min(1).optional(),
 
   /** When this event occurred. */
   timestamp: z.string().datetime({ offset: true }),

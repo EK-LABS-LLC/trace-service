@@ -1,6 +1,7 @@
 import type { StorageAdapter, TraceQueryFilters } from "../db/adapter";
-import type { Trace, NewTrace } from "../db/schema";
+import type { Trace, NewTrace, TraceSummary } from "../db/schema";
 import { batchTraceSchema, type TraceInput } from "../shared/validation";
+import { legacyTraceToOtelSpan, toOtelTraceId } from "./otel";
 
 /**
  * Result of a trace ingestion operation.
@@ -18,6 +19,80 @@ export interface QueryResult {
   total: number;
   limit: number;
   offset: number;
+}
+
+type AttributeMap = Record<string, unknown>;
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function attr(attributes: AttributeMap, key: string): unknown {
+  return attributes[key];
+}
+
+async function summaryToCompatTrace(
+  summary: TraceSummary,
+  storage: StorageAdapter,
+): Promise<Trace> {
+  const spans = await storage.getTraceSpans(summary.traceId, summary.projectId);
+  const root =
+    spans.find((span) => span.spanId === summary.rootSpanId) ??
+    spans.find((span) => !span.parentSpanId) ??
+    spans[0];
+  const attributes = objectValue(summary.attributes) as AttributeMap;
+  const spanAttributes = objectValue(root?.attributes) as AttributeMap;
+  const metadata = objectValue(root?.metadata);
+  const legacyTraceId = stringValue(metadata.legacyTraceId);
+  const provider =
+    stringValue(attr(spanAttributes, "gen_ai.provider.name")) ??
+    stringValue(attr(attributes, "gen_ai.provider.name")) ??
+    summary.source;
+  const model =
+    stringValue(attr(spanAttributes, "gen_ai.response.model")) ??
+    stringValue(attr(spanAttributes, "gen_ai.request.model")) ??
+    stringValue(attr(attributes, "gen_ai.request.model")) ??
+    root?.model ??
+    "unknown";
+
+  return {
+    traceId: legacyTraceId ?? summary.traceId,
+    projectId: summary.projectId,
+    timestamp: summary.startedAt,
+    provider,
+    modelRequested: model,
+    modelUsed: model,
+    providerRequestId: null,
+    requestBody: metadata.requestBody ?? null,
+    responseBody: metadata.responseBody ?? null,
+    inputTokens: summary.inputTokens,
+    outputTokens: summary.outputTokens,
+    outputText: metadata.outputText ?? null,
+    finishReason: metadata.finishReason ?? null,
+    status: summary.status,
+    error: root?.error ?? null,
+    latencyMs: summary.durationMs,
+    costCents: summary.costCents,
+    sessionId: summary.sessionId,
+    metadata: {
+      ...metadata,
+      otelTraceId: summary.traceId,
+      spanCount: summary.spanCount,
+      traceName: summary.name,
+    },
+  } as Trace;
+}
+
+function traceMatchesLegacyFilters(trace: Trace, filters: TraceQueryFilters): boolean {
+  if (filters.provider && trace.provider !== filters.provider) return false;
+  if (filters.model && trace.modelRequested !== filters.model) return false;
+  return true;
 }
 
 /**
@@ -85,6 +160,7 @@ export async function ingestTraceBatch(
   for (const traceInput of traces) {
     const newTrace = toNewTrace(traceInput, projectId);
     const inserted = await storage.insertTrace(projectId, newTrace);
+    await legacyTraceToOtelSpan(projectId, traceInput, storage);
     insertedTraces.push(inserted);
   }
 
@@ -119,6 +195,7 @@ export async function ingestTraceBatchIdempotent(
   for (const traceInput of traces) {
     const newTrace = toNewTrace(traceInput, projectId);
     const inserted = await storage.insertTraceIdempotent(projectId, newTrace);
+    await legacyTraceToOtelSpan(projectId, traceInput, storage);
     insertedTraces.push(inserted);
   }
 
@@ -137,7 +214,39 @@ export async function getTrace(
   projectId: string,
   storage: StorageAdapter,
 ): Promise<Trace | null> {
-  return storage.getTrace(traceId, projectId);
+  const otelTraceId = toOtelTraceId(traceId);
+  const summary =
+    (await storage.getTraceSummary(otelTraceId, projectId)) ??
+    (await storage.getTraceSummary(traceId, projectId));
+
+  if (summary) {
+    return summaryToCompatTrace(summary, storage);
+  }
+
+  const legacy = await storage.getTrace(traceId, projectId);
+  if (!legacy) return null;
+  await legacyTraceToOtelSpan(projectId, {
+    trace_id: legacy.traceId,
+    session_id: legacy.sessionId ?? undefined,
+    timestamp: new Date(legacy.timestamp).toISOString(),
+    provider: legacy.provider,
+    model_requested: legacy.modelRequested,
+    model_used: legacy.modelUsed ?? undefined,
+    provider_request_id: legacy.providerRequestId ?? undefined,
+    request_body: legacy.requestBody,
+    response_body: legacy.responseBody,
+    input_tokens: legacy.inputTokens ?? undefined,
+    output_tokens: legacy.outputTokens ?? undefined,
+    output_text: legacy.outputText ?? undefined,
+    finish_reason: legacy.finishReason ?? undefined,
+    status: legacy.status,
+    error: legacy.error,
+    latency_ms: legacy.latencyMs,
+    cost_cents: legacy.costCents ?? undefined,
+    metadata: legacy.metadata,
+  }, storage);
+  const backfilled = await storage.getTraceSummary(otelTraceId, projectId);
+  return backfilled ? summaryToCompatTrace(backfilled, storage) : legacy;
 }
 
 /**
@@ -148,12 +257,26 @@ export async function queryTraces(
   filters: TraceQueryFilters,
   storage: StorageAdapter,
 ): Promise<QueryResult> {
-  const result = await storage.queryTraces(projectId, filters);
+  const summaries = await storage.queryTraceSummaries(projectId, {
+    sessionId: filters.sessionId,
+    status: filters.status,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+    limit: 10_000,
+    offset: 0,
+    sort: "recent",
+  });
+  const compatTraces = await Promise.all(
+    summaries.traces.map((summary) => summaryToCompatTrace(summary, storage)),
+  );
+  const filtered = compatTraces.filter((trace) => traceMatchesLegacyFilters(trace, filters));
+  const offset = filters.offset ?? 0;
+  const limit = filters.limit ?? 100;
 
   return {
-    traces: result.traces,
-    total: result.total,
-    limit: filters.limit ?? 100,
-    offset: filters.offset ?? 0,
+    traces: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+    limit,
+    offset,
   };
 }
