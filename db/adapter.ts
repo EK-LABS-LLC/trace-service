@@ -27,8 +27,9 @@ export interface TraceQueryResult {
  */
 export interface SpanQueryFilters {
   sessionId?: string;
-  source?: "claude_code" | "codex" | "opencode" | "openclaw";
-  kind?: "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification";
+  traceId?: string;
+  source?: "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
+  kind?: "llm_call" | "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification";
   toolName?: string;
   status?: "success" | "error";
   dateFrom?: Date;
@@ -143,6 +144,14 @@ export interface StorageAdapter {
    * Used by WAL processing for crash recovery.
    */
   insertSpanIdempotent(projectId: string, span: NewSpan): Promise<Span>;
+
+  /**
+   * Insert a batch of spans idempotently in a single statement.
+   * Duplicate (project_id, span_id) rows are skipped; only newly inserted
+   * spans are returned. Used by OTLP ingestion, where exporters retry
+   * batches and must never fail on already-stored spans.
+   */
+  insertSpans(projectId: string, spans: NewSpan[]): Promise<Span[]>;
 
   /**
    * Get a single span by ID, scoped to a project.

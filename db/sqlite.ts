@@ -166,7 +166,7 @@ export class SqliteStorage implements StorageAdapter {
     const inserted = await this.db
       .insert(spans)
       .values({ ...span, projectId })
-      .onConflictDoNothing({ target: spans.spanId })
+      .onConflictDoNothing()
       .returning();
     if (inserted[0]) {
       return inserted[0];
@@ -177,6 +177,18 @@ export class SqliteStorage implements StorageAdapter {
       throw new Error(`Idempotent insert failed to find span ${span.spanId}`);
     }
     return existing;
+  }
+
+  async insertSpans(projectId: string, spanBatch: NewSpan[]): Promise<Span[]> {
+    const inserted: Span[] = [];
+    // Chunked multi-row inserts: each statement is atomic and stays well
+    // under SQLite's bound-parameter limit.
+    for (let i = 0; i < spanBatch.length; i += 250) {
+      const chunk = spanBatch.slice(i, i + 250).map((span) => ({ ...span, projectId }));
+      const rows = await this.db.insert(spans).values(chunk).onConflictDoNothing().returning();
+      inserted.push(...rows);
+    }
+    return inserted;
   }
 
   async getSpan(spanId: string, projectId: string): Promise<Span | null> {
@@ -193,6 +205,9 @@ export class SqliteStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));
@@ -308,6 +323,9 @@ export class SqliteStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));

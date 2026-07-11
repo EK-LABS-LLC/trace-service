@@ -5,6 +5,7 @@ import {
   real,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema-single";
 
@@ -123,7 +124,8 @@ export type NewTrace = typeof traces.$inferInsert;
 export const spans = sqliteTable(
   "spans",
   {
-    spanId: text("span_id").primaryKey(),
+    spanId: text("span_id").notNull(),
+    traceId: text("trace_id"),
     projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
@@ -144,10 +146,20 @@ export const spans = sqliteTable(
     cwd: text("cwd"),
     model: text("model"),
     agentName: text("agent_name"),
+    provider: text("provider"),
+    modelUsed: text("model_used"),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
+    costCents: real("cost_cents"),
+    finishReason: text("finish_reason"),
+    outputText: text("output_text"),
+    providerRequestId: text("provider_request_id"),
     metadata: text("metadata", { mode: "json" }),
   },
   (table) => [
+    primaryKey({ columns: [table.projectId, table.spanId] }),
     index("spans_project_timestamp_idx").on(table.projectId, table.timestamp),
+    index("spans_project_trace_idx").on(table.projectId, table.traceId),
     index("spans_project_session_idx").on(table.projectId, table.sessionId),
     index("spans_project_kind_idx").on(table.projectId, table.kind),
   ],
