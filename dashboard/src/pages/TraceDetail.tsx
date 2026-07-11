@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactElement } from "react";
 import { useParams, Link } from "react-router-dom";
 import TraceHeader from "../components/traces/TraceHeader";
 import TraceMetadata from "../components/traces/TraceMetadata";
@@ -6,6 +6,7 @@ import JsonViewer from "../components/traces/JsonViewer";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { useTraceDetailQuery } from "../api";
 import { useProject } from "../hooks/useProject";
+import type { Span } from "../lib/apiClient";
 
 function NotFoundState() {
   return (
@@ -47,6 +48,57 @@ function ErrorState({
           Retry
         </button>
       </div>
+    </div>
+  );
+}
+
+function labelForSpan(span: Span): string {
+  return span.toolName ?? span.eventType ?? span.kind;
+}
+
+function TraceSpanHierarchy({ spans }: { spans: Span[] }) {
+  const sorted = [...spans].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+  );
+  const byParent = new Map<string, Span[]>();
+  for (const span of sorted) {
+    const parent = span.parentSpanId ?? "";
+    byParent.set(parent, [...(byParent.get(parent) ?? []), span]);
+  }
+
+  const renderSpan = (span: Span, depth = 0): ReactElement => (
+    <div key={span.spanId}>
+      <div
+        className="grid grid-cols-[1fr_auto_auto] gap-4 items-center py-2 border-b border-neutral-800 last:border-b-0"
+        style={{ paddingLeft: depth * 20 }}
+      >
+        <div className="min-w-0">
+          <div className="text-sm text-neutral-100 truncate">{labelForSpan(span)}</div>
+          <div className="text-xs text-neutral-500 font-mono truncate">
+            {span.eventType} · {span.kind}
+          </div>
+        </div>
+        <div className="text-xs text-neutral-400">{span.durationMs ? `${span.durationMs}ms` : ""}</div>
+        <div
+          className={
+            span.status === "error"
+              ? "text-xs text-rose-400"
+              : "text-xs text-emerald-400"
+          }
+        >
+          {span.status}
+        </div>
+      </div>
+      {(byParent.get(span.spanId) ?? []).map((child) => renderSpan(child, depth + 1))}
+    </div>
+  );
+
+  const roots = byParent.get("") ?? sorted.filter((span) => !spans.some((s) => s.spanId === span.parentSpanId));
+
+  return (
+    <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
+      <h3 className="text-xs text-neutral-500 uppercase tracking-wide mb-4">Timeline</h3>
+      <div>{roots.map((span) => renderSpan(span))}</div>
     </div>
   );
 }
@@ -100,6 +152,10 @@ export default function TraceDetail() {
       <div className="flex-1 overflow-auto p-6">
         <div className="max-w-6xl mx-auto space-y-6">
           <TraceMetadata trace={trace} />
+
+          {trace.spans && trace.spans.length > 0 && (
+            <TraceSpanHierarchy spans={trace.spans} />
+          )}
 
           {trace.metadata && Object.keys(trace.metadata).length > 0 && (
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
