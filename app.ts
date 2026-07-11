@@ -9,6 +9,7 @@ import { auth } from "./auth/auth";
 import {
   handleBatchTraces,
   handleAsyncTrace,
+  handleOtlpTraces,
   getTraces,
   getTraceById,
 } from "./routes/traces";
@@ -28,16 +29,29 @@ import {
   handleCreateLocalLoginToken,
 } from "./routes/local-login";
 
-function allowedOrigins(): string[] {
-  // Allow all origins for self-hosted deployments
-  // Users can access their own server from any IP/domain
-  // Security is user-controlled since they own the infrastructure
-  return ["*"];
+export function allowedOrigins(): string[] {
+  return (env.PULSE_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Exact-match origin check for credentialed CORS. The dashboard is served
+ * same-origin, so no allowlist entries are needed for normal deployments;
+ * a configured "*" reflects the request origin (explicit opt-in only —
+ * reflecting arbitrary origins with credentials is unsafe on public hosts).
+ */
+function corsOrigin(allowed: string[]): (origin: string) => string | null {
+  return (origin) => {
+    if (allowed.includes("*")) return origin;
+    return allowed.includes(origin) ? origin : null;
+  };
 }
 
 export function createApp(): Hono {
   const app = new Hono();
-  const origins = allowedOrigins();
+  const origins = corsOrigin(allowedOrigins());
 
   app.onError(errorHandler);
   app.use("*", logger);
@@ -87,6 +101,7 @@ export function createApp(): Hono {
 
   app.post("/v1/auth/login", isAuthenticated);
 
+  app.post("/v1/traces", authMiddleware, handleOtlpTraces);
   app.post("/v1/traces/batch", authMiddleware, handleBatchTraces);
   app.post("/v1/traces/async", authMiddleware, handleAsyncTrace);
   app.get("/v1/traces", authMiddleware, getTraces);
