@@ -20,7 +20,8 @@
     "build:pulse": "bun run build:dashboard-assets && bun build ./pulse.ts --compile --outfile ./dist/pulse-server",
     "build:pulse-scale": "bun run build:pulse",
     "release:artifacts": "bun run scripts/release.ts",
-    "test": "bun test --env-file=.env.test",
+    "test": "bash scripts/run-e2e.sh single",
+    "test:live": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",
     "format": "bunx prettier --write \"**/*.{ts,tsx,js,json}\""
   },

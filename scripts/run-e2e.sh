@@ -18,14 +18,9 @@ cd "$ROOT_DIR"
 
 SCALE_DATABASE_PORT="${SCALE_DATABASE_PORT:-55433}"
 SCALE_DATABASE_URL="${SCALE_DATABASE_URL:-postgresql://pulse:pulse@localhost:${SCALE_DATABASE_PORT}/pulse}"
-PORT="${TEST_PORT:-}"
-if [[ -z "$PORT" ]]; then
-  if [[ "$SPLIT" == "1" ]]; then
-    PORT="$((20000 + RANDOM % 20000))"
-  else
-    PORT="3000"
-  fi
-fi
+# Always pick a random high port by default so the suite never collides with
+# a dev server on :3000 (set TEST_PORT to pin one).
+PORT="${TEST_PORT:-$((20000 + RANDOM % 20000))}"
 
 SUFFIX="${MODE}"
 if [[ "$SPLIT" == "1" ]]; then
