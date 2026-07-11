@@ -1,11 +1,56 @@
 import type { Context } from "hono";
 import { storage } from "../db";
 import { ingestTraces, queryTraces, getTrace } from "../services/traces";
+import { ingestSpanBatch } from "../services/spans";
+import {
+  getSdkTraceSummary,
+  listSdkTraceSummaries,
+  mergeTracePages,
+} from "../services/sdk-traces";
+import { extractOtlpSpans } from "../lib/otlp";
 import { ZodError } from "zod";
 import { traceQuerySchema, batchTraceSchema } from "../shared/validation";
 import type { TraceInput } from "../shared/validation";
 import { getEventBus } from "../event-bus/client";
 import { buildTraceIngestSubject } from "../event-bus/subjects";
+
+/**
+ * Handler for POST /v1/traces
+ * Accepts an OTLP/HTTP JSON traces payload and stores Pulse SDK spans.
+ *
+ * Responds per the OTLP spec: 200 with an empty ExportTraceServiceResponse on
+ * full success, 200 with partialSuccess when some spans were dropped, and 400
+ * only when the request itself is malformed.
+ */
+export async function handleOtlpTraces(c: Context): Promise<Response> {
+  const projectId = c.get("projectId") as string;
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+
+  try {
+    const { spans, rejectedSpans, errorMessage } = extractOtlpSpans(body);
+    await ingestSpanBatch(projectId, spans, storage);
+    if (rejectedSpans > 0) {
+      return c.json(
+        {
+          partialSuccess: {
+            rejectedSpans,
+            errorMessage: errorMessage ?? "Spans failed validation",
+          },
+        },
+        200,
+      );
+    }
+    return c.json({}, 200);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Invalid OTLP payload" }, 400);
+  }
+}
 
 /**
  * Handler for POST /v1/traces/batch
@@ -186,11 +231,37 @@ export async function getTraces(c: Context): Promise<Response> {
     offset: params.offset,
   };
 
-  const result = await queryTraces(projectId, filters, storage);
+  // Fetch the full matching sets so offset/limit apply to the merged timeline.
+  const filterWithoutPage = {
+    sessionId: filters.sessionId,
+    provider: filters.provider,
+    model: filters.model,
+    status: filters.status,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  };
+  const [sdkTraces, legacyTotal] = await Promise.all([
+    listSdkTraceSummaries(projectId, storage, filters),
+    storage.countTraces(projectId, filterWithoutPage),
+  ]);
+  const legacyResult =
+    legacyTotal === 0
+      ? { traces: [], total: 0, limit: 0, offset: 0 }
+      : await queryTraces(
+          projectId,
+          {
+            ...filterWithoutPage,
+            limit: legacyTotal,
+            offset: 0,
+          },
+          storage,
+        );
+
+  const page = mergeTracePages(sdkTraces, legacyResult.traces, filters);
   console.log(
-    `[traces] GET /v1/traces - SUCCESS - project=${projectId}, returned=${result.traces.length}, total=${result.total}`,
+    `[traces] GET /v1/traces - SUCCESS - project=${projectId}, returned=${page.traces.length}, total=${page.total}`,
   );
-  return c.json(result, 200);
+  return c.json(page, 200);
 }
 
 /**
@@ -200,6 +271,9 @@ export async function getTraces(c: Context): Promise<Response> {
 export async function getTraceById(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
   const traceId = c.req.param("id");
+  if (!traceId) {
+    return c.json({ error: "Trace id is required" }, 400);
+  }
 
   console.log(
     `[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`,
@@ -208,6 +282,10 @@ export async function getTraceById(c: Context): Promise<Response> {
   const trace = await getTrace(traceId, projectId, storage);
 
   if (!trace) {
+    const sdkTrace = await getSdkTraceSummary(traceId, projectId, storage);
+    if (sdkTrace) {
+      return c.json(sdkTrace, 200);
+    }
     console.warn(
       `[traces] GET /v1/traces/:id - NOT FOUND - project=${projectId}, trace_id=${traceId}`,
     );

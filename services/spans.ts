@@ -17,6 +17,7 @@ export interface QuerySpanResult {
 function toNewSpan(input: SpanInput, projectId: string): NewSpan {
   return {
     spanId: input.span_id,
+    traceId: input.trace_id,
     projectId,
     sessionId: input.session_id,
     parentSpanId: input.parent_span_id,
@@ -35,6 +36,14 @@ function toNewSpan(input: SpanInput, projectId: string): NewSpan {
     cwd: input.cwd,
     model: input.model,
     agentName: input.agent_name,
+    provider: input.provider,
+    modelUsed: input.model_used,
+    inputTokens: input.input_tokens,
+    outputTokens: input.output_tokens,
+    costCents: input.cost_cents,
+    finishReason: input.finish_reason,
+    outputText: input.output_text,
+    providerRequestId: input.provider_request_id,
     metadata: input.metadata,
   };
 }
@@ -53,12 +62,10 @@ export async function ingestSpanBatch(
   spans: SpanInput[],
   storage: StorageAdapter,
 ): Promise<IngestSpanResult> {
-  const insertedSpans: Span[] = [];
-  for (const spanInput of spans) {
-    const newSpan = toNewSpan(spanInput, projectId);
-    const inserted = await storage.insertSpan(projectId, newSpan);
-    insertedSpans.push(inserted);
-  }
+  const insertedSpans = await storage.insertSpans(
+    projectId,
+    spans.map((spanInput) => toNewSpan(spanInput, projectId)),
+  );
 
   return {
     count: insertedSpans.length,
