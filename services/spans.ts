@@ -4,6 +4,7 @@ import { batchSpanSchema, type SpanInput } from "../shared/validation";
 
 export interface IngestSpanResult {
   count: number;
+  skipped: number;
   spans: Span[];
 }
 
@@ -69,6 +70,7 @@ export async function ingestSpanBatch(
 
   return {
     count: insertedSpans.length,
+    skipped: spans.length - insertedSpans.length,
     spans: insertedSpans,
   };
 }
@@ -87,6 +89,7 @@ export async function ingestSpanBatchIdempotent(
 
   return {
     count: insertedSpans.length,
+    skipped: spans.length - insertedSpans.length,
     spans: insertedSpans,
   };
 }

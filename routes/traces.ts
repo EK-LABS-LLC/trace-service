@@ -41,7 +41,10 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
 
   try {
     const { spans, rejectedSpans, errorMessage } = extracted;
-    await ingestSpanBatch(projectId, spans, storage);
+    const { count, skipped } = await ingestSpanBatch(projectId, spans, storage);
+    console.log(
+      `[traces] POST /v1/traces - SUCCESS - project=${projectId}, ingested=${count}, skipped=${skipped}, rejected=${rejectedSpans}`,
+    );
     if (rejectedSpans > 0) {
       return c.json(
         {

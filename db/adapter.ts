@@ -158,10 +158,11 @@ export interface StorageAdapter {
   insertSpanIdempotent(projectId: string, span: NewSpan): Promise<Span>;
 
   /**
-   * Insert a batch of spans idempotently in a single statement.
-   * Duplicate (project_id, span_id) rows are skipped; only newly inserted
-   * spans are returned. Used by OTLP ingestion, where exporters retry
-   * batches and must never fail on already-stored spans.
+   * Insert a batch of spans idempotently, chunked into multiple statements to
+   * stay under the driver's bound-parameter limit. Duplicate (project_id,
+   * span_id) rows are skipped; only newly inserted spans are returned. Used by
+   * both legacy span-batch and OTLP ingestion, where exporters retry batches
+   * and must never fail on already-stored spans.
    */
   insertSpans(projectId: string, spans: NewSpan[]): Promise<Span[]>;
 

@@ -20,8 +20,10 @@ export async function handleGetSessionTraces(c: Context): Promise<Response> {
     return c.json({ error: "Session id is required" }, 400);
   }
 
-  const result = await getSessionTraces(sessionId, projectId, storage);
-  const sdkTraces = await listSdkSessionTraceSummaries(sessionId, projectId, storage);
+  const [result, sdkTraces] = await Promise.all([
+    getSessionTraces(sessionId, projectId, storage),
+    listSdkSessionTraceSummaries(sessionId, projectId, storage),
+  ]);
 
   const traces = [...result.traces, ...sdkTraces].sort(
     (a, b) => timestampMs(a.timestamp) - timestampMs(b.timestamp),
