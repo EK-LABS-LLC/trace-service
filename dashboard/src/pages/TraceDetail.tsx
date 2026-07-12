@@ -30,13 +30,7 @@ function LoadingState() {
   );
 }
 
-function ErrorState({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry: () => void;
-}) {
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="flex-1 flex items-center justify-center">
       <div className="text-center">
@@ -66,39 +60,46 @@ function TraceSpanHierarchy({ spans }: { spans: Span[] }) {
     byParent.set(parent, [...(byParent.get(parent) ?? []), span]);
   }
 
-  const renderSpan = (span: Span, depth = 0): ReactElement => (
-    <div key={span.spanId}>
-      <div
-        className="grid grid-cols-[1fr_auto_auto] gap-4 items-center py-2 border-b border-neutral-800 last:border-b-0"
-        style={{ paddingLeft: depth * 20 }}
-      >
-        <div className="min-w-0">
-          <div className="text-sm text-neutral-100 truncate">{labelForSpan(span)}</div>
-          <div className="text-xs text-neutral-500 font-mono truncate">
-            {span.eventType} · {span.kind}
+  const renderSpan = (span: Span, visited: Set<string>, depth = 0): ReactElement | null => {
+    if (visited.has(span.spanId)) return null;
+    const nextVisited = new Set(visited).add(span.spanId);
+    return (
+      <div key={span.spanId}>
+        <div
+          className="grid grid-cols-[1fr_auto_auto] gap-4 items-center py-2 border-b border-neutral-800 last:border-b-0"
+          style={{ paddingLeft: depth * 20 }}
+        >
+          <div className="min-w-0">
+            <div className="text-sm text-neutral-100 truncate">{labelForSpan(span)}</div>
+            <div className="text-xs text-neutral-500 font-mono truncate">
+              {span.eventType} · {span.kind}
+            </div>
+          </div>
+          <div className="text-xs text-neutral-400">
+            {span.durationMs ? `${span.durationMs}ms` : ""}
+          </div>
+          <div
+            className={
+              span.status === "error" ? "text-xs text-rose-400" : "text-xs text-emerald-400"
+            }
+          >
+            {span.status}
           </div>
         </div>
-        <div className="text-xs text-neutral-400">{span.durationMs ? `${span.durationMs}ms` : ""}</div>
-        <div
-          className={
-            span.status === "error"
-              ? "text-xs text-rose-400"
-              : "text-xs text-emerald-400"
-          }
-        >
-          {span.status}
-        </div>
+        {(byParent.get(span.spanId) ?? []).map((child) =>
+          renderSpan(child, nextVisited, depth + 1),
+        )}
       </div>
-      {(byParent.get(span.spanId) ?? []).map((child) => renderSpan(child, depth + 1))}
-    </div>
-  );
+    );
+  };
 
-  const roots = byParent.get("") ?? sorted.filter((span) => !spans.some((s) => s.spanId === span.parentSpanId));
+  const spanIds = new Set(spans.map((span) => span.spanId));
+  const roots = sorted.filter((span) => !span.parentSpanId || !spanIds.has(span.parentSpanId));
 
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
       <h3 className="text-xs text-neutral-500 uppercase tracking-wide mb-4">Timeline</h3>
-      <div>{roots.map((span) => renderSpan(span))}</div>
+      <div>{roots.map((span) => renderSpan(span, new Set()))}</div>
     </div>
   );
 }
@@ -111,8 +112,7 @@ export default function TraceDetail() {
 
   const loading = traceQuery.isPending;
   const trace = traceQuery.data ?? null;
-  const errorMessage =
-    traceQuery.error instanceof Error ? traceQuery.error.message : null;
+  const errorMessage = traceQuery.error instanceof Error ? traceQuery.error.message : null;
 
   const notFound = useMemo(() => {
     if (!id) return true;
@@ -130,9 +130,7 @@ export default function TraceDetail() {
   }
 
   if (errorMessage) {
-    return (
-      <ErrorState message={errorMessage} onRetry={() => traceQuery.refetch()} />
-    );
+    return <ErrorState message={errorMessage} onRetry={() => traceQuery.refetch()} />;
   }
 
   if (!trace) {
@@ -153,9 +151,7 @@ export default function TraceDetail() {
         <div className="max-w-6xl mx-auto space-y-6">
           <TraceMetadata trace={trace} />
 
-          {trace.spans && trace.spans.length > 0 && (
-            <TraceSpanHierarchy spans={trace.spans} />
-          )}
+          {trace.spans && trace.spans.length > 0 && <TraceSpanHierarchy spans={trace.spans} />}
 
           {trace.metadata && Object.keys(trace.metadata).length > 0 && (
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">
@@ -167,9 +163,7 @@ export default function TraceDetail() {
                   <div key={key}>
                     <dt className="text-xs text-neutral-500 mb-1">{key}</dt>
                     <dd className="text-sm text-neutral-100 font-mono">
-                      {typeof value === "string"
-                        ? value
-                        : JSON.stringify(value)}
+                      {typeof value === "string" ? value : JSON.stringify(value)}
                     </dd>
                   </div>
                 ))}

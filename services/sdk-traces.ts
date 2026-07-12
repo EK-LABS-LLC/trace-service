@@ -26,7 +26,9 @@ export interface SdkTraceSummary {
 }
 
 function spanMetadata(span: Span): Record<string, unknown> {
-  return typeof span.metadata === "object" && span.metadata !== null && !Array.isArray(span.metadata)
+  return typeof span.metadata === "object" &&
+    span.metadata !== null &&
+    !Array.isArray(span.metadata)
     ? (span.metadata as Record<string, unknown>)
     : {};
 }
@@ -60,9 +62,7 @@ export function deriveTraceSummary(traceId: string, traceSpans: Span[]): SdkTrac
   const requestBody = metadata["pulse.request"] ?? metadata.request;
   const responseBody = metadata["pulse.response"] ?? metadata.response;
   const toolIds = new Set(
-    sorted
-      .filter((span) => span.kind === "tool_use")
-      .map((span) => span.toolUseId ?? span.spanId),
+    sorted.filter((span) => span.kind === "tool_use").map((span) => span.toolUseId ?? span.spanId),
   );
 
   const llmSpans = sorted.filter((span) => span.kind === "llm_call");
@@ -149,10 +149,11 @@ function groupSpansByTraceId(spans: Span[]): Map<string, Span[]> {
 
 function matchesTraceFilters(
   summary: SdkTraceSummary,
-  filters: Pick<TraceQueryFilters, "provider" | "model">,
+  filters: Pick<TraceQueryFilters, "provider" | "model" | "status">,
 ): boolean {
   if (filters.provider && summary.provider !== filters.provider) return false;
   if (filters.model && summary.modelRequested !== filters.model) return false;
+  if (filters.status && summary.status !== filters.status) return false;
   return true;
 }
 
@@ -166,7 +167,6 @@ export async function listSdkTraceSummaries(
 ): Promise<SdkTraceSummary[]> {
   const spans = await queryAllSdkSpans(projectId, storage, {
     sessionId: filters.sessionId,
-    status: filters.status,
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
   });
@@ -175,6 +175,21 @@ export async function listSdkTraceSummaries(
     .map(([traceId, traceSpans]) => deriveTraceSummary(traceId, traceSpans))
     .filter((summary) => matchesTraceFilters(summary, filters))
     .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp));
+}
+
+/** Fetch a bounded page of SDK traces while grouping/counting in storage. */
+export async function querySdkTraceSummaries(
+  projectId: string,
+  storage: StorageAdapter,
+  filters: TraceQueryFilters = {},
+): Promise<{ traces: SdkTraceSummary[]; total: number }> {
+  const page = await storage.querySdkTraceIds(projectId, filters);
+  const traces = (
+    await Promise.all(
+      page.traceIds.map((traceId) => getSdkTraceSummary(traceId, projectId, storage)),
+    )
+  ).filter((summary): summary is SdkTraceSummary => summary !== null);
+  return { traces, total: page.total };
 }
 
 /**
@@ -211,6 +226,7 @@ export function mergeTracePages<T extends { timestamp: Date | string | number }>
   sdkTraces: T[],
   legacyTraces: T[],
   filters: { limit?: number; offset?: number },
+  totals?: { sdk: number; legacy: number },
 ): { traces: T[]; total: number; limit: number; offset: number } {
   const offset = filters.offset ?? 0;
   const limit = filters.limit ?? 100;
@@ -220,7 +236,7 @@ export function mergeTracePages<T extends { timestamp: Date | string | number }>
 
   return {
     traces: combined.slice(offset, offset + limit),
-    total: combined.length,
+    total: totals ? totals.sdk + totals.legacy : combined.length,
     limit,
     offset,
   };

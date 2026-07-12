@@ -1,15 +1,4 @@
-import {
-  eq,
-  and,
-  gte,
-  lte,
-  sql,
-  sum,
-  avg,
-  count,
-  isNotNull,
-  desc,
-} from "drizzle-orm";
+import { eq, and, gte, lte, sql, sum, avg, count, isNotNull, desc } from "drizzle-orm";
 import type { Database } from "./index";
 import { getDbDialect } from "./index";
 import { traces, spans } from "./schema";
@@ -241,8 +230,7 @@ export async function getAvgLatency(
       .where(buildLlmSpanConditions(projectId, dateRange)),
   ]);
 
-  const totalLatency =
-    Number(traceResult[0]?.total ?? 0) + Number(spanResult[0]?.total ?? 0);
+  const totalLatency = Number(traceResult[0]?.total ?? 0) + Number(spanResult[0]?.total ?? 0);
   const totalCount = Number(traceResult[0]?.count ?? 0) + Number(spanResult[0]?.count ?? 0);
   return totalCount === 0 ? 0 : totalLatency / totalCount;
 }
@@ -334,14 +322,8 @@ export async function getTotalRequests(
   dateRange: DateRange,
 ): Promise<number> {
   const [traceResult, spanResult] = await Promise.all([
-    db
-      .select({ total: count() })
-      .from(traces)
-      .where(buildDateConditions(projectId, dateRange)),
-    db
-      .select({ total: count() })
-      .from(spans)
-      .where(buildLlmSpanConditions(projectId, dateRange)),
+    db.select({ total: count() }).from(traces).where(buildDateConditions(projectId, dateRange)),
+    db.select({ total: count() }).from(spans).where(buildLlmSpanConditions(projectId, dateRange)),
   ]);
 
   return (traceResult[0]?.total ?? 0) + (spanResult[0]?.total ?? 0);
@@ -355,23 +337,22 @@ export async function getTotalSessions(
   projectId: string,
   dateRange: DateRange,
 ): Promise<number> {
-  const [traceResult, spanResult] = await Promise.all([
+  const [traceRows, spanRows] = await Promise.all([
     db
-      .select({ total: sql<number>`COUNT(DISTINCT ${traces.sessionId})` })
+      .selectDistinct({ sessionId: traces.sessionId })
       .from(traces)
-      .where(
-        and(
-          buildDateConditions(projectId, dateRange),
-          isNotNull(traces.sessionId),
-        ),
-      ),
+      .where(and(buildDateConditions(projectId, dateRange), isNotNull(traces.sessionId))),
     db
-      .select({ total: sql<number>`COUNT(DISTINCT ${spans.sessionId})` })
+      .selectDistinct({ sessionId: spans.sessionId })
       .from(spans)
       .where(buildLlmSpanConditions(projectId, dateRange)),
   ]);
 
-  return Number(traceResult[0]?.total ?? 0) + Number(spanResult[0]?.total ?? 0);
+  return new Set(
+    [...traceRows, ...spanRows]
+      .map((row) => row.sessionId)
+      .filter((sessionId): sessionId is string => Boolean(sessionId)),
+  ).size;
 }
 
 /**
@@ -386,12 +367,7 @@ export async function getErrorCount(
     db
       .select({ total: count() })
       .from(traces)
-      .where(
-        and(
-          buildDateConditions(projectId, dateRange),
-          eq(traces.status, "error"),
-        ),
-      ),
+      .where(and(buildDateConditions(projectId, dateRange), eq(traces.status, "error"))),
     db
       .select({ total: count() })
       .from(spans)
@@ -433,7 +409,11 @@ export async function getCostByProvider(
   const byProvider = new Map<string, CostByProvider>();
   for (const row of [...traceRows, ...spanRows] as any[]) {
     const provider = String(row.provider ?? "unknown");
-    const entry = byProvider.get(provider) ?? { provider, costCents: 0, requests: 0 };
+    const entry = byProvider.get(provider) ?? {
+      provider,
+      costCents: 0,
+      requests: 0,
+    };
     entry.costCents += Number(row.costCents ?? 0);
     entry.requests += Number(row.requests ?? 0);
     byProvider.set(provider, entry);
@@ -724,12 +704,7 @@ export async function getAvgSessionSpanDuration(
   const result = await db
     .select({ avgDuration: avg(spans.durationMs) })
     .from(spans)
-    .where(
-      and(
-        buildSpanDateConditions(projectId, dateRange),
-        eq(spans.kind, "session"),
-      ),
-    );
+    .where(and(buildSpanDateConditions(projectId, dateRange), eq(spans.kind, "session")));
 
   return Number(result[0]?.avgDuration ?? 0);
 }

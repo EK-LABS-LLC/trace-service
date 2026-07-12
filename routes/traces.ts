@@ -4,7 +4,7 @@ import { ingestTraces, queryTraces, getTrace } from "../services/traces";
 import { ingestSpanBatch } from "../services/spans";
 import {
   getSdkTraceSummary,
-  listSdkTraceSummaries,
+  querySdkTraceSummaries,
   mergeTracePages,
 } from "../services/sdk-traces";
 import { extractOtlpSpans } from "../lib/otlp";
@@ -32,8 +32,15 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
+  let extracted;
   try {
-    const { spans, rejectedSpans, errorMessage } = extractOtlpSpans(body);
+    extracted = extractOtlpSpans(body);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Invalid OTLP payload" }, 400);
+  }
+
+  try {
+    const { spans, rejectedSpans, errorMessage } = extracted;
     await ingestSpanBatch(projectId, spans, storage);
     if (rejectedSpans > 0) {
       return c.json(
@@ -48,7 +55,8 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
     }
     return c.json({}, 200);
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Invalid OTLP payload" }, 400);
+    console.error(`[traces] POST /v1/traces - ERROR - project=${projectId}`, err);
+    throw err;
   }
 }
 
@@ -65,9 +73,7 @@ export async function handleBatchTraces(c: Context): Promise<Response> {
   try {
     body = await c.req.json();
   } catch {
-    console.error(
-      `[traces] POST /v1/traces/batch - Invalid JSON body - project=${projectId}`,
-    );
+    console.error(`[traces] POST /v1/traces/batch - Invalid JSON body - project=${projectId}`);
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
@@ -84,10 +90,7 @@ export async function handleBatchTraces(c: Context): Promise<Response> {
       );
       return c.json({ error: "Validation failed", details: err.issues }, 400);
     }
-    console.error(
-      `[traces] POST /v1/traces/batch - ERROR - project=${projectId}`,
-      err,
-    );
+    console.error(`[traces] POST /v1/traces/batch - ERROR - project=${projectId}`, err);
     throw err;
   }
 }
@@ -105,9 +108,7 @@ export async function handleAsyncTrace(c: Context): Promise<Response> {
   try {
     payload = await c.req.json();
   } catch {
-    console.error(
-      `[traces] POST /v1/traces/async - Invalid JSON body - project=${projectId}`,
-    );
+    console.error(`[traces] POST /v1/traces/async - Invalid JSON body - project=${projectId}`);
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
@@ -154,9 +155,7 @@ export async function getTraces(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
   const rawQuery = c.req.query();
 
-  console.log(
-    `[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`,
-  );
+  console.log(`[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`);
 
   let params;
   try {
@@ -166,10 +165,7 @@ export async function getTraces(c: Context): Promise<Response> {
       console.error(
         `[traces] GET /v1/traces - Invalid query params - project=${projectId}, errors=${JSON.stringify(err.issues)}`,
       );
-      return c.json(
-        { error: "Invalid query parameters", details: err.issues },
-        400,
-      );
+      return c.json({ error: "Invalid query parameters", details: err.issues }, 400);
     }
     throw err;
   }
@@ -190,10 +186,7 @@ export async function getTraces(c: Context): Promise<Response> {
     if (!trimmed) return undefined;
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const iso =
-        boundary === "start"
-          ? `${trimmed}T00:00:00.000Z`
-          : `${trimmed}T23:59:59.999Z`;
+      const iso = boundary === "start" ? `${trimmed}T00:00:00.000Z` : `${trimmed}T23:59:59.999Z`;
       const date = new Date(iso);
       return Number.isNaN(date.getTime()) ? undefined : date;
     }
@@ -231,7 +224,6 @@ export async function getTraces(c: Context): Promise<Response> {
     offset: params.offset,
   };
 
-  // Fetch the full matching sets so offset/limit apply to the merged timeline.
   const filterWithoutPage = {
     sessionId: filters.sessionId,
     provider: filters.provider,
@@ -240,24 +232,21 @@ export async function getTraces(c: Context): Promise<Response> {
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
   };
-  const [sdkTraces, legacyTotal] = await Promise.all([
-    listSdkTraceSummaries(projectId, storage, filters),
-    storage.countTraces(projectId, filterWithoutPage),
+  // Each source only needs its first offset + limit rows to produce the merged page.
+  const windowSize = (filters.offset ?? 0) + (filters.limit ?? 100);
+  const [sdkResult, legacyResult] = await Promise.all([
+    querySdkTraceSummaries(projectId, storage, {
+      ...filterWithoutPage,
+      limit: windowSize,
+      offset: 0,
+    }),
+    queryTraces(projectId, { ...filterWithoutPage, limit: windowSize, offset: 0 }, storage),
   ]);
-  const legacyResult =
-    legacyTotal === 0
-      ? { traces: [], total: 0, limit: 0, offset: 0 }
-      : await queryTraces(
-          projectId,
-          {
-            ...filterWithoutPage,
-            limit: legacyTotal,
-            offset: 0,
-          },
-          storage,
-        );
 
-  const page = mergeTracePages(sdkTraces, legacyResult.traces, filters);
+  const page = mergeTracePages(sdkResult.traces, legacyResult.traces, filters, {
+    sdk: sdkResult.total,
+    legacy: legacyResult.total,
+  });
   console.log(
     `[traces] GET /v1/traces - SUCCESS - project=${projectId}, returned=${page.traces.length}, total=${page.total}`,
   );
@@ -275,9 +264,7 @@ export async function getTraceById(c: Context): Promise<Response> {
     return c.json({ error: "Trace id is required" }, 400);
   }
 
-  console.log(
-    `[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`,
-  );
+  console.log(`[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`);
 
   const trace = await getTrace(traceId, projectId, storage);
 

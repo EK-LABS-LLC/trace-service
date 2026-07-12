@@ -40,6 +40,7 @@ const FIRST_CLASS_ATTRIBUTE_KEYS = new Set([
   "pulse.source",
   "pulse.kind",
   "pulse.event_type",
+  "pulse.provider",
   "pulse.tool.id",
   "pulse.tool.name",
   "pulse.tool.input",
@@ -143,8 +144,12 @@ function capPayload(value: unknown): unknown {
 
 function otlpTimeToIso(value: string | number | undefined): string {
   if (value === undefined) return new Date().toISOString();
-  const ns = BigInt(String(value));
-  return new Date(Number(ns / 1_000_000n)).toISOString();
+  try {
+    const date = new Date(Number(BigInt(String(value)) / 1_000_000n));
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
 }
 
 function durationMs(
@@ -152,8 +157,11 @@ function durationMs(
   end: string | number | undefined,
 ): number | undefined {
   if (start === undefined || end === undefined) return undefined;
-  const diffNs = BigInt(String(end)) - BigInt(String(start));
-  return Number(diffNs / 1_000_000n);
+  try {
+    return Number((BigInt(String(end)) - BigInt(String(start))) / 1_000_000n);
+  } catch {
+    return undefined;
+  }
 }
 
 function optionalId(value: string | undefined): string | undefined {
@@ -246,12 +254,17 @@ export function extractOtlpSpans(payload: unknown): OtlpExtractResult {
         if (totalSpans > MAX_SPANS_PER_EXPORT) {
           throw new Error(`Export exceeds ${MAX_SPANS_PER_EXPORT} spans`);
         }
-        const parsed = spanSchema.safeParse(otlpSpanToSpanInput(rawSpan as OtlpSpan));
-        if (parsed.success) {
-          spans.push(parsed.data);
-        } else {
+        try {
+          const parsed = spanSchema.safeParse(otlpSpanToSpanInput(rawSpan as OtlpSpan));
+          if (parsed.success) {
+            spans.push(parsed.data);
+            continue;
+          }
           rejectedSpans += 1;
           errorMessage ??= parsed.error.issues[0]?.message;
+        } catch (err) {
+          rejectedSpans += 1;
+          errorMessage ??= err instanceof Error ? err.message : "Malformed span";
         }
       }
     }

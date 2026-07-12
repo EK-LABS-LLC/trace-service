@@ -38,6 +38,7 @@ describe("extractOtlpSpans", () => {
             { key: "pulse.kind", value: { stringValue: "llm_call" } },
             { key: "pulse.event_type", value: { stringValue: "provider_call" } },
             { key: "pulse.session_id", value: { stringValue: "session-1" } },
+            { key: "pulse.provider", value: { stringValue: "openai" } },
             { key: "pulse.trace_id", value: { stringValue: TRACE_ID } },
             { key: "gen_ai.provider.name", value: { stringValue: "openai" } },
             { key: "gen_ai.request.model", value: { stringValue: "gpt-4o" } },
@@ -92,6 +93,7 @@ describe("extractOtlpSpans", () => {
             { key: "pulse.event_type", value: { stringValue: "provider_call" } },
             { key: "pulse.session_id", value: { stringValue: "session-1" } },
             { key: "gen_ai.usage.input_tokens", value: { intValue: "42" } },
+            { key: "pulse.provider", value: { stringValue: "openai" } },
             { key: "pulse.request", value: { stringValue: '{"model":"gpt-4o"}' } },
           ],
           status: { code: 1 },
@@ -101,6 +103,7 @@ describe("extractOtlpSpans", () => {
 
     const metadata = spans[0]!.metadata as Record<string, unknown>;
     expect(metadata["gen_ai.usage.input_tokens"]).toBeUndefined();
+    expect(metadata["pulse.provider"]).toBeUndefined();
     expect(metadata["pulse.request"]).toEqual({ model: "gpt-4o" });
   });
 
@@ -137,6 +140,28 @@ describe("extractOtlpSpans", () => {
     expect(spans).toHaveLength(1);
     expect(rejectedSpans).toBe(1);
     expect(errorMessage).toBeTruthy();
+  });
+
+  test("does not reject a batch when one span has malformed timestamps", () => {
+    const result = extractOtlpSpans(
+      otlpPayload([
+        {
+          traceId: TRACE_ID,
+          spanId: SPAN_ID,
+          startTimeUnixNano: "1.2e9",
+          endTimeUnixNano: "not-a-timestamp",
+          attributes: [
+            { key: "pulse.source", value: { stringValue: "sdk" } },
+            { key: "pulse.kind", value: { stringValue: "llm_call" } },
+            { key: "pulse.event_type", value: { stringValue: "provider_call" } },
+            { key: "pulse.session_id", value: { stringValue: "session-1" } },
+          ],
+        },
+      ]),
+    );
+
+    expect(result.spans).toHaveLength(1);
+    expect(result.spans[0]?.duration_ms).toBeUndefined();
   });
 
   test("throws when resourceSpans is missing", () => {

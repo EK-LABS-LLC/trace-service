@@ -29,7 +29,14 @@ export interface SpanQueryFilters {
   sessionId?: string;
   traceId?: string;
   source?: "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
-  kind?: "llm_call" | "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification";
+  kind?:
+    | "llm_call"
+    | "tool_use"
+    | "agent_run"
+    | "session"
+    | "user_prompt"
+    | "llm_response"
+    | "notification";
   toolName?: string;
   status?: "success" | "error";
   dateFrom?: Date;
@@ -73,6 +80,11 @@ export interface AgentSessionQueryResult {
  */
 export interface SpanQueryResult {
   spans: Span[];
+  total: number;
+}
+
+export interface SdkTraceIdQueryResult {
+  traceIds: string[];
   total: number;
 }
 
@@ -169,11 +181,14 @@ export interface StorageAdapter {
    */
   queryAgentSessions(
     projectId: string,
-    filters?: AgentSessionQueryFilters
+    filters?: AgentSessionQueryFilters,
   ): Promise<AgentSessionQueryResult>;
 
   /**
    * Count spans for a project with optional filters.
    */
   countSpans(projectId: string, filters?: SpanQueryFilters): Promise<number>;
+
+  /** Query distinct SDK trace ids in trace-summary order. */
+  querySdkTraceIds(projectId: string, filters?: TraceQueryFilters): Promise<SdkTraceIdQueryResult>;
 }

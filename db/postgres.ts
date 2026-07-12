@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, count, sql } from "drizzle-orm";
+import { eq, and, gte, lte, count, desc, sql } from "drizzle-orm";
 import { traces, sessions, spans } from "./schema-scale";
 import type { Trace, NewTrace, Session, NewSession, Span, NewSpan } from "./schema-scale";
 import type {
@@ -9,6 +9,7 @@ import type {
   AgentSessionQueryResult,
   SpanQueryFilters,
   SpanQueryResult,
+  SdkTraceIdQueryResult,
 } from "./adapter";
 
 /**
@@ -248,7 +249,7 @@ export class PostgresStorage implements StorageAdapter {
 
   async queryAgentSessions(
     projectId: string,
-    filters: AgentSessionQueryFilters = {}
+    filters: AgentSessionQueryFilters = {},
   ): Promise<AgentSessionQueryResult> {
     const conditions = [eq(spans.projectId, projectId)];
 
@@ -351,5 +352,51 @@ export class PostgresStorage implements StorageAdapter {
       .from(spans)
       .where(and(...conditions));
     return countResult[0]?.total ?? 0;
+  }
+
+  async querySdkTraceIds(
+    projectId: string,
+    filters: TraceQueryFilters = {},
+  ): Promise<SdkTraceIdQueryResult> {
+    const conditions = [eq(spans.projectId, projectId), eq(spans.source, "sdk")];
+    if (filters.sessionId) conditions.push(eq(spans.sessionId, filters.sessionId));
+    if (filters.dateFrom) conditions.push(gte(spans.timestamp, filters.dateFrom));
+    if (filters.dateTo) conditions.push(lte(spans.timestamp, filters.dateTo));
+    const whereClause = and(...conditions);
+    const provider = sql<string>`COALESCE(MAX(CASE WHEN ${spans.kind} = 'llm_call' THEN ${spans.provider} END), 'sdk')`;
+    const model = sql<string>`COALESCE(MAX(CASE WHEN ${spans.kind} = 'llm_call' THEN ${spans.model} END), 'unknown')`;
+    const errors = sql<number>`SUM(CASE WHEN ${spans.status} = 'error' THEN 1 ELSE 0 END)`;
+    const having = and(
+      filters.provider ? sql`${provider} = ${filters.provider}` : undefined,
+      filters.model ? sql`${model} = ${filters.model}` : undefined,
+      filters.status === "error" ? sql`${errors} > 0` : undefined,
+      filters.status === "success" ? sql`${errors} = 0` : undefined,
+    );
+    const groups = this.db
+      .select({
+        traceId: spans.traceId,
+        timestamp:
+          sql<Date>`COALESCE(MIN(CASE WHEN ${spans.kind} = 'llm_call' THEN ${spans.timestamp} END), MIN(${spans.timestamp}))`.as(
+            "timestamp",
+          ),
+      })
+      .from(spans)
+      .where(whereClause)
+      .groupBy(spans.traceId)
+      .having(having)
+      .as("sdk_trace_groups");
+    const [countRows, rows] = await Promise.all([
+      this.db.select({ total: count() }).from(groups),
+      this.db
+        .select({ traceId: groups.traceId })
+        .from(groups)
+        .orderBy(desc(groups.timestamp))
+        .limit(filters.limit ?? 100)
+        .offset(filters.offset ?? 0),
+    ]);
+    return {
+      traceIds: rows.map((row: { traceId: string }) => row.traceId),
+      total: countRows[0]?.total ?? 0,
+    };
   }
 }

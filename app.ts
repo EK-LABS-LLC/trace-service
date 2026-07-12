@@ -13,21 +13,13 @@ import {
   getTraces,
   getTraceById,
 } from "./routes/traces";
-import {
-  handleBatchSpans,
-  handleAsyncSpan,
-  getSpans,
-  getSpanById,
-} from "./routes/spans";
+import { handleBatchSpans, handleAsyncSpan, getSpans, getSpanById } from "./routes/spans";
 import { handleGetSessionTraces, handleGetSessionSpans } from "./routes/sessions";
 import { handleGetAnalytics, handleGetSpanAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
-import {
-  handleConsumeLocalLoginToken,
-  handleCreateLocalLoginToken,
-} from "./routes/local-login";
+import { handleConsumeLocalLoginToken, handleCreateLocalLoginToken } from "./routes/local-login";
 
 export function allowedOrigins(): string[] {
   return (env.PULSE_ALLOWED_ORIGINS ?? "")
@@ -39,19 +31,23 @@ export function allowedOrigins(): string[] {
 /**
  * Exact-match origin check for credentialed CORS. The dashboard is served
  * same-origin, so no allowlist entries are needed for normal deployments;
- * a configured "*" reflects the request origin (explicit opt-in only —
- * reflecting arbitrary origins with credentials is unsafe on public hosts).
+ * wildcard entries are ignored because these routes allow credentials.
  */
 function corsOrigin(allowed: string[]): (origin: string) => string | null {
   return (origin) => {
-    if (allowed.includes("*")) return origin;
     return allowed.includes(origin) ? origin : null;
   };
 }
 
 export function createApp(): Hono {
   const app = new Hono();
-  const origins = corsOrigin(allowedOrigins());
+  const allowed = allowedOrigins();
+  if (allowed.includes("*")) {
+    console.warn(
+      "[cors] Ignoring wildcard PULSE_ALLOWED_ORIGINS for credentialed dashboard routes; configure explicit origins",
+    );
+  }
+  const origins = corsOrigin(allowed.filter((origin) => origin !== "*"));
 
   app.onError(errorHandler);
   app.use("*", logger);
@@ -88,10 +84,7 @@ export function createApp(): Hono {
 
   // Better-Auth exposes this route by default
   app.post("/api/auth/sign-up/email", (c) => {
-    return c.json(
-      { error: "Use /dashboard/api/signup for account creation" },
-      403,
-    );
+    return c.json({ error: "Use /dashboard/api/signup for account creation" }, 403);
   });
 
   app.post("/dashboard/api/signup", handleSignupWithProject);
