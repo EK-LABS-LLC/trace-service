@@ -2,14 +2,18 @@ import { MAX_OTLP_SPANS_PER_EXPORT, spanSchema, type SpanInput } from "../shared
 
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 
+interface OtlpAnyValue {
+  stringValue?: string;
+  intValue?: string | number;
+  doubleValue?: number;
+  boolValue?: boolean;
+  arrayValue?: { values?: OtlpAnyValue[] };
+  kvlistValue?: { values?: OtlpAttribute[] };
+}
+
 interface OtlpAttribute {
   key: string;
-  value?: {
-    stringValue?: string;
-    intValue?: string | number;
-    doubleValue?: number;
-    boolValue?: boolean;
-  };
+  value?: OtlpAnyValue;
 }
 
 interface OtlpSpan {
@@ -39,6 +43,12 @@ const FIRST_CLASS_ATTRIBUTE_KEYS = new Set([
   "pulse.source",
   "pulse.kind",
   "pulse.event_type",
+  "pulse.session_name",
+  "pulse.cwd",
+  "pulse.model",
+  "pulse.is_interrupt",
+  "pulse.agent.name",
+  "pulse.metadata",
   "pulse.provider",
   "pulse.tool.id",
   "pulse.tool.name",
@@ -62,18 +72,36 @@ const FIRST_CLASS_ATTRIBUTE_KEYS = new Set([
   "gen_ai.conversation.id",
 ]);
 
-function attrValue(attr: OtlpAttribute | undefined): unknown {
-  const value = attr?.value;
+function anyValue(value: OtlpAnyValue | undefined): unknown {
   if (!value) return undefined;
   if (value.stringValue !== undefined) return value.stringValue;
   if (value.intValue !== undefined) return Number(value.intValue);
   if (value.doubleValue !== undefined) return value.doubleValue;
   if (value.boolValue !== undefined) return value.boolValue;
+  if (value.arrayValue !== undefined) {
+    return (value.arrayValue.values ?? []).map(anyValue);
+  }
+  if (value.kvlistValue !== undefined) {
+    return Object.fromEntries(
+      (value.kvlistValue.values ?? []).map((attr) => [
+        attr.key,
+        anyValue(attr.value),
+      ]),
+    );
+  }
   return undefined;
 }
 
 function attrsToMap(attrs: OtlpAttribute[] | undefined): Map<string, unknown> {
-  return new Map((attrs ?? []).map((attr) => [attr.key, attrValue(attr)]));
+  return new Map((attrs ?? []).map((attr) => [attr.key, anyValue(attr.value)]));
+}
+
+function valueAttr(attrs: Map<string, unknown>, ...keys: string[]): unknown {
+  for (const key of keys) {
+    const value = attrs.get(key);
+    if (value !== undefined) return value;
+  }
+  return undefined;
 }
 
 function stringAttr(attrs: Map<string, unknown>, ...keys: string[]): string | undefined {
@@ -92,6 +120,14 @@ function numberAttr(attrs: Map<string, unknown>, ...keys: string[]): number | un
       const parsed = Number(value);
       if (Number.isFinite(parsed)) return parsed;
     }
+  }
+  return undefined;
+}
+
+function boolAttr(attrs: Map<string, unknown>, ...keys: string[]): boolean | undefined {
+  for (const key of keys) {
+    const value = attrs.get(key);
+    if (typeof value === "boolean") return value;
   }
   return undefined;
 }
@@ -175,12 +211,24 @@ function otlpSpanToSpanInput(span: OtlpSpan): SpanInput {
   const kind =
     stringAttr(attrs, "pulse.kind") ?? (eventType === "provider_call" ? "llm_call" : "tool_use");
   const toolInput = capPayload(
-    parsePayload(stringAttr(attrs, "pulse.tool.input", "gen_ai.tool.input")),
+    parsePayload(valueAttr(attrs, "pulse.tool.input", "gen_ai.tool.input")),
   );
   const toolResponse = capPayload(
-    parsePayload(stringAttr(attrs, "pulse.tool.response", "gen_ai.tool.output")),
+    parsePayload(valueAttr(attrs, "pulse.tool.response", "gen_ai.tool.output")),
   );
   const metadata: Record<string, unknown> = {};
+  const pulseMetadata = valueAttr(attrs, "pulse.metadata");
+  if (
+    pulseMetadata &&
+    typeof pulseMetadata === "object" &&
+    !Array.isArray(pulseMetadata)
+  ) {
+    Object.assign(metadata, pulseMetadata);
+  } else if (pulseMetadata !== undefined) {
+    metadata["pulse.metadata"] = capPayload(parsePayload(pulseMetadata));
+  }
+  const sessionName = stringAttr(attrs, "pulse.session_name");
+  if (sessionName !== undefined) metadata.session_name = sessionName;
   for (const [key, value] of attrs) {
     if (FIRST_CLASS_ATTRIBUTE_KEYS.has(key)) continue;
     if (key.startsWith("pulse.") || key.startsWith("gen_ai.") || key === "service.name") {
@@ -205,8 +253,16 @@ function otlpSpanToSpanInput(span: OtlpSpan): SpanInput {
     tool_name: kind === "tool_use" ? (toolName ?? span.name) : undefined,
     tool_input: toolInput,
     tool_response: toolResponse,
-    error: capPayload(parsePayload(stringAttr(attrs, "pulse.error", "exception.message"))),
-    model: stringAttr(attrs, "gen_ai.request.model", "gen_ai.response.model"),
+    error: capPayload(parsePayload(valueAttr(attrs, "pulse.error", "exception.message"))),
+    is_interrupt: boolAttr(attrs, "pulse.is_interrupt"),
+    cwd: stringAttr(attrs, "pulse.cwd"),
+    model: stringAttr(
+      attrs,
+      "pulse.model",
+      "gen_ai.request.model",
+      "gen_ai.response.model",
+    ),
+    agent_name: stringAttr(attrs, "pulse.agent.name"),
     provider: stringAttr(attrs, "gen_ai.provider.name", "gen_ai.system", "pulse.provider"),
     model_used: stringAttr(attrs, "gen_ai.response.model"),
     input_tokens: numberAttr(attrs, "gen_ai.usage.input_tokens"),
