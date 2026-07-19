@@ -5,6 +5,135 @@ import {
   createTestProject,
   createTestTraces,
 } from "./setup";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { resolveDataPaths } from "../lib/data-paths";
+
+function spanWalDir(): string {
+  return process.env.WAL_SPAN_DIR ?? resolveDataPaths(process.env).walSpanDir;
+}
+
+function readSpanWalFiles(): string[] {
+  const segmentsDir = join(spanWalDir(), "segments");
+  if (!existsSync(segmentsDir)) return [];
+
+  return readdirSync(segmentsDir)
+    .filter((file) => file.endsWith(".ndjson"))
+    .sort()
+    .map((file) => readFileSync(join(segmentsDir, file), "utf-8"));
+}
+
+interface SpanWalRecord {
+  sequence: number;
+  payload?: {
+    projectId?: string;
+    spans?: Array<{ span_id?: string }>;
+  };
+}
+
+function readSpanWalRecords(): SpanWalRecord[] {
+  return readSpanWalFiles().flatMap((contents) =>
+    contents
+      .split("\n")
+      .filter(Boolean)
+      .flatMap((line) => {
+        try {
+          return [JSON.parse(line) as SpanWalRecord];
+        } catch {
+          // The server may still be appending the final line while we poll.
+          return [];
+        }
+      }),
+  );
+}
+
+function spanWalSequences(spanId: string): number[] {
+  return readSpanWalRecords().flatMap((record) =>
+    record.payload?.spans?.some((span) => span.span_id === spanId)
+      ? [record.sequence]
+      : [],
+  );
+}
+
+async function waitForSpanWalExport(
+  projectId: string,
+  spanIds: string[],
+): Promise<SpanWalRecord | undefined> {
+  const expectedIds = new Set(spanIds);
+  for (let i = 0; i < 40; i++) {
+    const record = readSpanWalRecords().find((candidate) => {
+      const spans = candidate.payload?.spans ?? [];
+      return (
+        candidate.payload?.projectId === projectId &&
+        spans.length === expectedIds.size &&
+        spans.every(
+          (span) => span.span_id !== undefined && expectedIds.has(span.span_id),
+        )
+      );
+    });
+    if (record) return record;
+    await Bun.sleep(100);
+  }
+
+  return undefined;
+}
+
+async function waitForSpanWalContents(spanIds: string[]): Promise<string> {
+  for (let i = 0; i < 30; i++) {
+    const walContents = readSpanWalFiles().join("\n");
+    if (spanIds.every((spanId) => walContents.includes(spanId))) {
+      return walContents;
+    }
+    await Bun.sleep(100);
+  }
+
+  return readSpanWalFiles().join("\n");
+}
+
+async function waitForSpanWalRecords(
+  spanId: string,
+  count: number,
+): Promise<number[]> {
+  for (let i = 0; i < 30; i++) {
+    const sequences = spanWalSequences(spanId);
+    if (sequences.length >= count) return sequences;
+    await Bun.sleep(100);
+  }
+
+  return spanWalSequences(spanId);
+}
+
+async function waitForSpanWalCheckpoint(sequence: number): Promise<boolean> {
+  const checkpointPath = join(spanWalDir(), "wal.checkpoint");
+  for (let i = 0; i < 40; i++) {
+    if (existsSync(checkpointPath)) {
+      const checkpoint = JSON.parse(readFileSync(checkpointPath, "utf-8")) as {
+        nextSequence: string;
+      };
+      if (Number(checkpoint.nextSequence) > sequence) return true;
+    }
+    await Bun.sleep(100);
+  }
+
+  return false;
+}
+
+async function waitForApiResponse(
+  path: string,
+  apiKey: string,
+  predicate: (data: unknown) => boolean,
+  attempts = 40,
+): Promise<Response> {
+  for (let i = 0; i < attempts; i++) {
+    const response = await authFetch(path, apiKey);
+    if (response.status === 200 && predicate(await response.clone().json())) {
+      return response;
+    }
+    await Bun.sleep(100);
+  }
+
+  return authFetch(path, apiKey);
+}
 
 function otelTraceId(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -57,7 +186,10 @@ describe("OTLP / SDK traces", () => {
                         key: "pulse.session_id",
                         value: { stringValue: sessionId },
                       },
-                      { key: "pulse.trace_id", value: { stringValue: traceId } },
+                      {
+                        key: "pulse.trace_id",
+                        value: { stringValue: traceId },
+                      },
                       {
                         key: "gen_ai.provider.name",
                         value: { stringValue: "openai" },
@@ -87,7 +219,10 @@ describe("OTLP / SDK traces", () => {
                         value: { intValue: "36" },
                       },
                       { key: "pulse.cost_cents", value: { doubleValue: 0.42 } },
-                      { key: "pulse.output_text", value: { stringValue: "Hi there" } },
+                      {
+                        key: "pulse.output_text",
+                        value: { stringValue: "Hi there" },
+                      },
                     ],
                     status: { code: 1 },
                   },
@@ -104,9 +239,14 @@ describe("OTLP / SDK traces", () => {
     const ingestData = (await ingestResponse.json()) as Record<string, unknown>;
     expect(ingestData.partialSuccess).toBeUndefined();
 
-    const listResponse = await authFetch(
+    const walContents = await waitForSpanWalContents([spanId]);
+    expect(walContents).toContain(spanId);
+    expect(walContents).toContain(testProject.id);
+
+    const listResponse = await waitForApiResponse(
       `/v1/traces?session_id=${sessionId}`,
       testProject.apiKey,
+      (data) => (data as { total?: number }).total === 1,
     );
     const listData = (await listResponse.json()) as {
       traces: Array<{
@@ -135,9 +275,13 @@ describe("OTLP / SDK traces", () => {
     expect(listData.traces[0]?.providerRequestId).toBe("chatcmpl-abc");
     expect(listData.traces[0]?.outputText).toBe("Hi there");
 
-    const detailResponse = await authFetch(
+    const detailResponse = await waitForApiResponse(
       `/v1/traces/${traceId}`,
       testProject.apiKey,
+      (data) =>
+        (data as { spans?: Array<{ spanId: string }> }).spans?.some(
+          (span) => span.spanId === spanId,
+        ) === true,
     );
     const detail = (await detailResponse.json()) as {
       traceId: string;
@@ -147,9 +291,13 @@ describe("OTLP / SDK traces", () => {
     expect(detail.traceId).toBe(traceId);
     expect(detail.spans.some((span) => span.spanId === spanId)).toBe(true);
 
-    const sessionResponse = await authFetch(
+    const sessionResponse = await waitForApiResponse(
       `/v1/sessions/${sessionId}`,
       testProject.apiKey,
+      (data) =>
+        (data as { traces?: Array<{ traceId: string }> }).traces?.some(
+          (trace) => trace.traceId === traceId,
+        ) === true,
     );
     const sessionData = (await sessionResponse.json()) as {
       traces: Array<{ traceId: string }>;
@@ -178,10 +326,19 @@ describe("OTLP / SDK traces", () => {
                   attributes: [
                     { key: "pulse.source", value: { stringValue: "sdk" } },
                     { key: "pulse.kind", value: { stringValue: "llm_call" } },
-                    { key: "pulse.event_type", value: { stringValue: "provider_call" } },
-                    { key: "pulse.session_id", value: { stringValue: sessionId } },
+                    {
+                      key: "pulse.event_type",
+                      value: { stringValue: "provider_call" },
+                    },
+                    {
+                      key: "pulse.session_id",
+                      value: { stringValue: sessionId },
+                    },
                     { key: "pulse.trace_id", value: { stringValue: traceId } },
-                    { key: "gen_ai.request.model", value: { stringValue: "gpt-4o-mini" } },
+                    {
+                      key: "gen_ai.request.model",
+                      value: { stringValue: "gpt-4o-mini" },
+                    },
                   ],
                   status: { code: 1 },
                 },
@@ -207,15 +364,109 @@ describe("OTLP / SDK traces", () => {
     });
     expect(retry.status).toBe(200);
 
-    const detailResponse = await authFetch(
+    const duplicateSequences = await waitForSpanWalRecords(spanId, 2);
+    expect(duplicateSequences).toHaveLength(2);
+    expect(
+      await waitForSpanWalCheckpoint(Math.max(...duplicateSequences)),
+    ).toBe(true);
+
+    const detailResponse = await waitForApiResponse(
       `/v1/traces/${traceId}`,
       testProject.apiKey,
+      (data) =>
+        (data as { spans?: Array<{ spanId: string }> }).spans?.filter(
+          (span) => span.spanId === spanId,
+        ).length === 1,
     );
     const detail = (await detailResponse.json()) as {
       spans: Array<{ spanId: string }>;
     };
     expect(detailResponse.status).toBe(200);
-    expect(detail.spans.filter((span) => span.spanId === spanId)).toHaveLength(1);
+    expect(detail.spans.filter((span) => span.spanId === spanId)).toHaveLength(
+      1,
+    );
+  });
+
+  test("POST /v1/traces persists all 101 spans from one OTLP export", async () => {
+    const traceId = otelTraceId();
+    const sessionId = crypto.randomUUID();
+    const spanIds = Array.from({ length: 101 }, () => otelSpanId());
+    const expectedSpanIds = new Set(spanIds);
+    const startNs = BigInt(Date.now()) * 1_000_000n;
+    expect(expectedSpanIds.size).toBe(101);
+
+    const response = await authFetch("/v1/traces", testProject.apiKey, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resourceSpans: [
+          {
+            scopeSpans: [
+              {
+                spans: spanIds.map((spanId, index) => {
+                  const spanStartNs = startNs + BigInt(index) * 1_000_000n;
+                  return {
+                    traceId,
+                    spanId,
+                    name: `provider_call_${index}`,
+                    startTimeUnixNano: spanStartNs.toString(),
+                    endTimeUnixNano: (spanStartNs + 1_000_000n).toString(),
+                    attributes: [
+                      { key: "pulse.source", value: { stringValue: "sdk" } },
+                      {
+                        key: "pulse.kind",
+                        value: { stringValue: "llm_call" },
+                      },
+                      {
+                        key: "pulse.event_type",
+                        value: { stringValue: "provider_call" },
+                      },
+                      {
+                        key: "pulse.session_id",
+                        value: { stringValue: sessionId },
+                      },
+                    ],
+                    status: { code: 1 },
+                  };
+                }),
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({});
+
+    const walRecord = await waitForSpanWalExport(testProject.id, spanIds);
+    expect(walRecord).toBeDefined();
+    const walSpanIds = walRecord?.payload?.spans?.map((span) => span.span_id);
+    expect(walSpanIds).toHaveLength(101);
+    expect(new Set(walSpanIds)).toEqual(expectedSpanIds);
+
+    const detailResponse = await waitForApiResponse(
+      `/v1/traces/${traceId}`,
+      testProject.apiKey,
+      (data) => {
+        const spans = (data as { spans?: Array<{ spanId: string }> }).spans;
+        if (spans?.length !== 101) return false;
+        const persistedIds = new Set(spans.map((span) => span.spanId));
+        return (
+          persistedIds.size === 101 &&
+          spanIds.every((spanId) => persistedIds.has(spanId))
+        );
+      },
+      100,
+    );
+    const detail = (await detailResponse.json()) as {
+      spans: Array<{ spanId: string }>;
+    };
+    const persistedIds = new Set(detail.spans.map((span) => span.spanId));
+
+    expect(detailResponse.status).toBe(200);
+    expect(detail.spans).toHaveLength(101);
+    expect(persistedIds).toEqual(expectedSpanIds);
   });
 
   test("GET /v1/traces merges SDK and legacy traces with correct offset", async () => {
@@ -244,7 +495,10 @@ describe("OTLP / SDK traces", () => {
                       endTimeUnixNano: (startNs + 50_000_000n).toString(),
                       attributes: [
                         { key: "pulse.source", value: { stringValue: "sdk" } },
-                        { key: "pulse.kind", value: { stringValue: "llm_call" } },
+                        {
+                          key: "pulse.kind",
+                          value: { stringValue: "llm_call" },
+                        },
                         {
                           key: "pulse.event_type",
                           value: { stringValue: "provider_call" },
@@ -278,9 +532,10 @@ describe("OTLP / SDK traces", () => {
       expect(response.status).toBe(200);
     }
 
-    const page1 = await authFetch(
+    const page1 = await waitForApiResponse(
       `/v1/traces?session_id=${sessionId}&limit=2&offset=0`,
       project.apiKey,
+      (data) => (data as { total?: number }).total === 4,
     );
     const page1Data = (await page1.json()) as {
       traces: Array<{ traceId: string }>;
@@ -315,7 +570,12 @@ describe("OTLP / SDK traces", () => {
     expect(allIds.size).toBe(4);
   });
 
-  test("POST /v1/traces reports invalid spans via partialSuccess", async () => {
+  test("POST /v1/traces queues valid spans and reports validation rejects", async () => {
+    const validSpanId = otelSpanId();
+    const invalidSpanId = otelSpanId();
+    const traceId = otelTraceId();
+    const sessionId = crypto.randomUUID();
+    const startNs = BigInt(Date.now()) * 1_000_000n;
     const response = await authFetch("/v1/traces", testProject.apiKey, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -326,9 +586,26 @@ describe("OTLP / SDK traces", () => {
               {
                 spans: [
                   {
-                    traceId: otelTraceId(),
-                    spanId: otelSpanId(),
-                    startTimeUnixNano: (BigInt(Date.now()) * 1_000_000n).toString(),
+                    traceId,
+                    spanId: validSpanId,
+                    startTimeUnixNano: startNs.toString(),
+                    attributes: [
+                      { key: "pulse.source", value: { stringValue: "sdk" } },
+                      { key: "pulse.kind", value: { stringValue: "llm_call" } },
+                      {
+                        key: "pulse.event_type",
+                        value: { stringValue: "provider_call" },
+                      },
+                      {
+                        key: "pulse.session_id",
+                        value: { stringValue: sessionId },
+                      },
+                    ],
+                  },
+                  {
+                    traceId,
+                    spanId: invalidSpanId,
+                    startTimeUnixNano: startNs.toString(),
                     attributes: [
                       { key: "pulse.source", value: { stringValue: "sdk" } },
                       { key: "pulse.kind", value: { stringValue: "bad_kind" } },
@@ -338,7 +615,7 @@ describe("OTLP / SDK traces", () => {
                       },
                       {
                         key: "pulse.session_id",
-                        value: { stringValue: crypto.randomUUID() },
+                        value: { stringValue: sessionId },
                       },
                     ],
                   },
@@ -356,6 +633,56 @@ describe("OTLP / SDK traces", () => {
     };
     expect(data.partialSuccess?.rejectedSpans).toBe(1);
     expect(data.partialSuccess?.errorMessage).toBeTruthy();
+
+    const walContents = await waitForSpanWalContents([validSpanId]);
+    expect(walContents).toContain(validSpanId);
+    expect(walContents).not.toContain(invalidSpanId);
+
+    const detailResponse = await waitForApiResponse(
+      `/v1/traces/${traceId}`,
+      testProject.apiKey,
+      (detail) =>
+        (detail as { spans?: Array<{ spanId: string }> }).spans?.some(
+          (span) => span.spanId === validSpanId,
+        ) === true,
+    );
+    expect(detailResponse.status).toBe(200);
+  });
+
+  test("POST /v1/traces does not append an event when all spans are rejected", async () => {
+    const rejectedProject = await createTestProject(
+      "OTLP All Rejected Test Project",
+    );
+    const response = await authFetch("/v1/traces", rejectedProject.apiKey, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        resourceSpans: [
+          {
+            scopeSpans: [
+              {
+                spans: [
+                  {
+                    traceId: otelTraceId(),
+                    spanId: otelSpanId(),
+                    attributes: [
+                      { key: "pulse.kind", value: { stringValue: "bad_kind" } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as {
+      partialSuccess?: { rejectedSpans: number };
+    };
+    expect(data.partialSuccess?.rejectedSpans).toBe(1);
+    expect(readSpanWalFiles().join("\n")).not.toContain(rejectedProject.id);
   });
 
   test("POST /v1/traces rejects malformed payloads", async () => {

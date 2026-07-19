@@ -78,7 +78,13 @@ export const spanAnalyticsQuerySchema = z.object({
 /**
  * Source identifies which CLI tool produced the span.
  */
-export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw", "sdk"]);
+export const spanSourceSchema = z.enum([
+  "claude_code",
+  "codex",
+  "opencode",
+  "openclaw",
+  "sdk",
+]);
 
 /**
  * Span kind categorizes what the span represents.
@@ -204,10 +210,21 @@ export const spanSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+/** Maximum spans accepted from one OTLP export and stored in one WAL event. */
+export const MAX_OTLP_SPANS_PER_EXPORT = 1000;
+
 /**
  * Batch span schema - array of spans with max 100 items
  */
 export const batchSpanSchema = z.array(spanSchema).max(100);
+
+/**
+ * Span WAL payload schema - validates one complete OTLP export independently
+ * from the public span HTTP batch limit.
+ */
+export const walSpanBatchSchema = z
+  .array(spanSchema)
+  .max(MAX_OTLP_SPANS_PER_EXPORT);
 
 /**
  * Query params schema for GET /v1/spans
@@ -225,7 +242,13 @@ export const spanQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-export const agentSessionSortSchema = z.enum(["recent", "oldest", "duration", "errors", "volume"]);
+export const agentSessionSortSchema = z.enum([
+  "recent",
+  "oldest",
+  "duration",
+  "errors",
+  "volume",
+]);
 
 export const agentSessionQuerySchema = z.object({
   date_from: z.union([z.string(), z.coerce.number()]).optional(),

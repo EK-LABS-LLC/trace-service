@@ -6,6 +6,9 @@ import {
   statusSchema,
   spanKindSchema,
   spanSchema,
+  batchSpanSchema,
+  MAX_OTLP_SPANS_PER_EXPORT,
+  walSpanBatchSchema,
 } from "../shared/validation";
 
 /**
@@ -385,5 +388,23 @@ describe("spanSchema", () => {
       content: "I updated the service schema.",
       usage: { input_tokens: 100, output_tokens: 42 },
     });
+  });
+});
+
+describe("span batch schemas", () => {
+  it("keeps the public batch cap independent from the OTLP WAL cap", () => {
+    expect(
+      batchSpanSchema.safeParse(Array(101).fill(createValidSpan())).success,
+    ).toBe(false);
+    expect(
+      walSpanBatchSchema.safeParse(
+        Array(MAX_OTLP_SPANS_PER_EXPORT).fill(createValidSpan()),
+      ).success,
+    ).toBe(true);
+    expect(
+      walSpanBatchSchema.safeParse(
+        Array(MAX_OTLP_SPANS_PER_EXPORT + 1).fill(createValidSpan()),
+      ).success,
+    ).toBe(false);
   });
 });

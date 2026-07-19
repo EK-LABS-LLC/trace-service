@@ -1,7 +1,6 @@
 import type { Context } from "hono";
 import { storage } from "../db";
 import { ingestTraces, queryTraces, getTrace } from "../services/traces";
-import { ingestSpanBatch } from "../services/spans";
 import {
   getSdkTraceSummary,
   querySdkTraceSummaries,
@@ -11,12 +10,15 @@ import { extractOtlpSpans } from "../lib/otlp";
 import { ZodError } from "zod";
 import { traceQuerySchema, batchTraceSchema } from "../shared/validation";
 import type { TraceInput } from "../shared/validation";
-import { getEventBus } from "../event-bus/client";
-import { buildTraceIngestSubject } from "../event-bus/subjects";
+import { getEventBus, getSpanEventBus } from "../event-bus/client";
+import {
+  buildSpanIngestSubject,
+  buildTraceIngestSubject,
+} from "../event-bus/subjects";
 
 /**
  * Handler for POST /v1/traces
- * Accepts an OTLP/HTTP JSON traces payload and stores Pulse SDK spans.
+ * Accepts an OTLP/HTTP JSON traces payload and queues Pulse SDK spans.
  *
  * Responds per the OTLP spec: 200 with an empty ExportTraceServiceResponse on
  * full success, 200 with partialSuccess when some spans were dropped, and 400
@@ -36,31 +38,42 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
   try {
     extracted = extractOtlpSpans(body);
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Invalid OTLP payload" }, 400);
+    return c.json(
+      { error: err instanceof Error ? err.message : "Invalid OTLP payload" },
+      400,
+    );
   }
 
-  try {
-    const { spans, rejectedSpans, errorMessage } = extracted;
-    const { count, skipped } = await ingestSpanBatch(projectId, spans, storage);
-    console.log(
-      `[traces] POST /v1/traces - SUCCESS - project=${projectId}, ingested=${count}, skipped=${skipped}, rejected=${rejectedSpans}`,
-    );
-    if (rejectedSpans > 0) {
-      return c.json(
-        {
-          partialSuccess: {
-            rejectedSpans,
-            errorMessage: errorMessage ?? "Spans failed validation",
-          },
-        },
-        200,
+  const { spans, rejectedSpans, errorMessage } = extracted;
+  if (spans.length > 0) {
+    try {
+      await getSpanEventBus().publish(buildSpanIngestSubject(projectId), {
+        projectId,
+        spans,
+      });
+    } catch {
+      console.error(
+        `[traces] POST /v1/traces - Failed to publish - project=${projectId}, count=${spans.length}`,
       );
+      return c.json({ error: "Failed to enqueue span" }, 503);
     }
-    return c.json({}, 200);
-  } catch (err) {
-    console.error(`[traces] POST /v1/traces - ERROR - project=${projectId}`, err);
-    throw err;
   }
+
+  console.log(
+    `[traces] POST /v1/traces - SUCCESS - project=${projectId}, queued=${spans.length}, rejected=${rejectedSpans}`,
+  );
+  if (rejectedSpans > 0) {
+    return c.json(
+      {
+        partialSuccess: {
+          rejectedSpans,
+          errorMessage: errorMessage ?? "Spans failed validation",
+        },
+      },
+      200,
+    );
+  }
+  return c.json({}, 200);
 }
 
 /**
@@ -76,7 +89,9 @@ export async function handleBatchTraces(c: Context): Promise<Response> {
   try {
     body = await c.req.json();
   } catch {
-    console.error(`[traces] POST /v1/traces/batch - Invalid JSON body - project=${projectId}`);
+    console.error(
+      `[traces] POST /v1/traces/batch - Invalid JSON body - project=${projectId}`,
+    );
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
@@ -93,7 +108,10 @@ export async function handleBatchTraces(c: Context): Promise<Response> {
       );
       return c.json({ error: "Validation failed", details: err.issues }, 400);
     }
-    console.error(`[traces] POST /v1/traces/batch - ERROR - project=${projectId}`, err);
+    console.error(
+      `[traces] POST /v1/traces/batch - ERROR - project=${projectId}`,
+      err,
+    );
     throw err;
   }
 }
@@ -111,7 +129,9 @@ export async function handleAsyncTrace(c: Context): Promise<Response> {
   try {
     payload = await c.req.json();
   } catch {
-    console.error(`[traces] POST /v1/traces/async - Invalid JSON body - project=${projectId}`);
+    console.error(
+      `[traces] POST /v1/traces/async - Invalid JSON body - project=${projectId}`,
+    );
     return c.json({ error: "Invalid JSON body" }, 400);
   }
 
@@ -158,7 +178,9 @@ export async function getTraces(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
   const rawQuery = c.req.query();
 
-  console.log(`[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`);
+  console.log(
+    `[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`,
+  );
 
   let params;
   try {
@@ -168,7 +190,10 @@ export async function getTraces(c: Context): Promise<Response> {
       console.error(
         `[traces] GET /v1/traces - Invalid query params - project=${projectId}, errors=${JSON.stringify(err.issues)}`,
       );
-      return c.json({ error: "Invalid query parameters", details: err.issues }, 400);
+      return c.json(
+        { error: "Invalid query parameters", details: err.issues },
+        400,
+      );
     }
     throw err;
   }
@@ -189,7 +214,10 @@ export async function getTraces(c: Context): Promise<Response> {
     if (!trimmed) return undefined;
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const iso = boundary === "start" ? `${trimmed}T00:00:00.000Z` : `${trimmed}T23:59:59.999Z`;
+      const iso =
+        boundary === "start"
+          ? `${trimmed}T00:00:00.000Z`
+          : `${trimmed}T23:59:59.999Z`;
       const date = new Date(iso);
       return Number.isNaN(date.getTime()) ? undefined : date;
     }
@@ -243,7 +271,11 @@ export async function getTraces(c: Context): Promise<Response> {
       limit: windowSize,
       offset: 0,
     }),
-    queryTraces(projectId, { ...filterWithoutPage, limit: windowSize, offset: 0 }, storage),
+    queryTraces(
+      projectId,
+      { ...filterWithoutPage, limit: windowSize, offset: 0 },
+      storage,
+    ),
   ]);
 
   const page = mergeTracePages(sdkResult.traces, legacyResult.traces, filters, {
@@ -267,7 +299,9 @@ export async function getTraceById(c: Context): Promise<Response> {
     return c.json({ error: "Trace id is required" }, 400);
   }
 
-  console.log(`[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`);
+  console.log(
+    `[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`,
+  );
 
   const trace = await getTrace(traceId, projectId, storage);
 
