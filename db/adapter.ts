@@ -27,8 +27,16 @@ export interface TraceQueryResult {
  */
 export interface SpanQueryFilters {
   sessionId?: string;
-  source?: "claude_code" | "codex" | "opencode" | "openclaw";
-  kind?: "tool_use" | "agent_run" | "session" | "user_prompt" | "llm_response" | "notification";
+  traceId?: string;
+  source?: "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
+  kind?:
+    | "llm_call"
+    | "tool_use"
+    | "agent_run"
+    | "session"
+    | "user_prompt"
+    | "llm_response"
+    | "notification";
   toolName?: string;
   status?: "success" | "error";
   dateFrom?: Date;
@@ -72,6 +80,11 @@ export interface AgentSessionQueryResult {
  */
 export interface SpanQueryResult {
   spans: Span[];
+  total: number;
+}
+
+export interface SdkTraceIdQueryResult {
+  traceIds: string[];
   total: number;
 }
 
@@ -145,6 +158,15 @@ export interface StorageAdapter {
   insertSpanIdempotent(projectId: string, span: NewSpan): Promise<Span>;
 
   /**
+   * Insert a batch of spans idempotently, chunked into multiple statements to
+   * stay under the driver's bound-parameter limit. Duplicate (project_id,
+   * span_id) rows are skipped; only newly inserted spans are returned. Used by
+   * both legacy span-batch and OTLP ingestion, where exporters retry batches
+   * and must never fail on already-stored spans.
+   */
+  insertSpans(projectId: string, spans: NewSpan[]): Promise<Span[]>;
+
+  /**
    * Get a single span by ID, scoped to a project.
    * Returns null if not found.
    */
@@ -160,11 +182,14 @@ export interface StorageAdapter {
    */
   queryAgentSessions(
     projectId: string,
-    filters?: AgentSessionQueryFilters
+    filters?: AgentSessionQueryFilters,
   ): Promise<AgentSessionQueryResult>;
 
   /**
    * Count spans for a project with optional filters.
    */
   countSpans(projectId: string, filters?: SpanQueryFilters): Promise<number>;
+
+  /** Query distinct SDK trace ids in trace-summary order. */
+  querySdkTraceIds(projectId: string, filters?: TraceQueryFilters): Promise<SdkTraceIdQueryResult>;
 }

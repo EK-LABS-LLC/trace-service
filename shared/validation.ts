@@ -78,11 +78,12 @@ export const spanAnalyticsQuerySchema = z.object({
 /**
  * Source identifies which CLI tool produced the span.
  */
-export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw"]);
+export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw", "sdk"]);
 
 /**
  * Span kind categorizes what the span represents.
  *
+ * llm_call        - SDK provider/model call
  * tool_use        - agent executed a tool (bash, file edit, search, etc.)
  * agent_run       - a subagent started and completed a task
  * session         - session lifecycle event (start, end, stop, resume)
@@ -91,6 +92,7 @@ export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "ope
  * notification    - agent emitted a notification
  */
 export const spanKindSchema = z.enum([
+  "llm_call",
   "tool_use",
   "agent_run",
   "session",
@@ -110,13 +112,16 @@ export const spanKindSchema = z.enum([
  */
 export const spanSchema = z.object({
   /** Unique identifier for this span. */
-  span_id: z.string().uuid(),
+  span_id: z.string().min(1),
+
+  /** Groups provider/tool spans into an SDK trace. */
+  trace_id: z.string().min(1).optional(),
 
   /** Groups spans into a conversation or agent run. Provided by the source tool. */
   session_id: z.string().min(1),
 
   /** Parent span for building hierarchy (agent_run -> tool_use -> nested tool_use). */
-  parent_span_id: z.string().uuid().optional(),
+  parent_span_id: z.string().min(1).optional(),
 
   /** When this event occurred. */
   timestamp: z.string().datetime({ offset: true }),
@@ -169,6 +174,32 @@ export const spanSchema = z.object({
   /** Subagent type for agent_run spans (e.g. "Bash", "Explore", "Plan"). */
   agent_name: z.string().optional(),
 
+  // ── llm_call telemetry fields ──────────────────────────────────────
+
+  /** LLM provider that served the call (e.g. "openai", "anthropic"). */
+  provider: z.string().optional(),
+
+  /** Model the provider actually used, when it differs from `model` (requested). */
+  model_used: z.string().optional(),
+
+  /** Prompt tokens consumed by the call. */
+  input_tokens: z.number().int().nonnegative().optional(),
+
+  /** Completion tokens produced by the call. */
+  output_tokens: z.number().int().nonnegative().optional(),
+
+  /** Estimated cost of the call in cents. */
+  cost_cents: z.number().nonnegative().optional(),
+
+  /** Normalized finish reason (stop, length, tool_calls, ...). */
+  finish_reason: z.string().optional(),
+
+  /** Text content of the model's response. */
+  output_text: z.string().optional(),
+
+  /** Provider-assigned response/request id for cross-referencing. */
+  provider_request_id: z.string().optional(),
+
   /** Arbitrary additional data. */
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
@@ -183,6 +214,7 @@ export const batchSpanSchema = z.array(spanSchema).max(100);
  */
 export const spanQuerySchema = z.object({
   session_id: z.string().optional(),
+  trace_id: z.string().optional(),
   source: spanSourceSchema.optional(),
   kind: spanKindSchema.optional(),
   tool_name: z.string().optional(),

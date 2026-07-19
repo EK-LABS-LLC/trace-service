@@ -8,6 +8,20 @@
       "when": 1771501493308,
       "tag": "0000_handy_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783653357963,
+      "tag": "0001_spans_trace_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783660043195,
+      "tag": "0002_spans_telemetry",
+      "breakpoints": true
     }
   ]
 }

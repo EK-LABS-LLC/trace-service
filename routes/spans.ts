@@ -122,6 +122,7 @@ export async function getSpans(c: Context): Promise<Response> {
 
   const filters = {
     sessionId: params.session_id,
+    traceId: params.trace_id,
     source: params.source,
     kind: params.kind,
     toolName: params.tool_name,
@@ -139,6 +140,9 @@ export async function getSpans(c: Context): Promise<Response> {
 export async function getSpanById(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
   const spanId = c.req.param("id");
+  if (!spanId) {
+    return c.json({ error: "Span id is required" }, 400);
+  }
 
   const span = await getSpan(spanId, projectId, storage);
 

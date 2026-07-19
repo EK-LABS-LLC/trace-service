@@ -12,9 +12,13 @@ export function createAuth(
   provider: DrizzleProvider,
   authSchema: DrizzleAuthSchema,
 ) {
-  // Allow all origins for self-hosted deployments
-  // Users can access their own server from any IP/domain
-  // Security is user-controlled since they own the infrastructure
+  // Better Auth always trusts the baseURL origin; additional origins (e.g. a
+  // separately hosted dashboard) must be opted into via PULSE_ALLOWED_ORIGINS.
+  const extraOrigins = (env.PULSE_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
   return betterAuth({
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
@@ -25,6 +29,6 @@ export function createAuth(
     emailAndPassword: {
       enabled: true,
     },
-    trustedOrigins: ["*"],
+    trustedOrigins: extraOrigins,
   });
 }

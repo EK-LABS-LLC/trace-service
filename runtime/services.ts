@@ -2,7 +2,7 @@ import type { StorageAdapter } from "../db/adapter";
 
 type DrizzleAdapterDb =
   Parameters<typeof import("better-auth/adapters/drizzle").drizzleAdapter>[0];
-type BetterAuthInstance = ReturnType<typeof import("better-auth").betterAuth>;
+type BetterAuthInstance = ReturnType<typeof import("../auth/create-auth").createAuth>;
 
 export interface RuntimeServices {
   db: DrizzleAdapterDb;

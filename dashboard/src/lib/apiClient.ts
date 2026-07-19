@@ -55,6 +55,7 @@ export interface Trace {
   outputTokens?: number;
   outputText?: string;
   finishReason?: string;
+  spans?: Span[];
 }
 
 export interface TracesResponse {
@@ -68,12 +69,20 @@ export interface Session {
   spans?: Span[];
 }
 
-export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw";
+export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
 
-export type SpanKind = "tool_use" | "agent_run" | "session" | "user_prompt" | "notification";
+export type SpanKind =
+  | "llm_call"
+  | "tool_use"
+  | "agent_run"
+  | "session"
+  | "user_prompt"
+  | "llm_response"
+  | "notification";
 
 export interface Span {
   spanId: string;
+  traceId?: string;
   sessionId: string;
   parentSpanId?: string;
   timestamp: string;
@@ -134,6 +143,7 @@ export interface AgentSessionsResponse {
 
 export interface GetSpansParams {
   session_id?: string;
+  trace_id?: string;
   source?: SpanSource;
   kind?: SpanKind;
   tool_name?: string;

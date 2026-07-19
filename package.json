@@ -20,7 +20,8 @@
     "build:pulse": "bun run build:dashboard-assets && bun build ./pulse.ts --compile --outfile ./dist/pulse-server",
     "build:pulse-scale": "bun run build:pulse",
     "release:artifacts": "bun run scripts/release.ts",
-    "test": "bun test --env-file=.env.test",
+    "test": "bash scripts/run-e2e.sh single",
+    "test:live": "bun test --env-file=.env.test",
     "test:watch": "bun test --watch --env-file=.env.test",
     "format": "bunx prettier --write \"**/*.{ts,tsx,js,json}\""
   },
@@ -35,11 +36,15 @@
   },
   "dependencies": {
     "@types/node": "^25.6.0",
-    "better-auth": "^1.4.18",
-    "drizzle-orm": "^0.45.1",
-    "hono": "^4.11.5",
+    "better-auth": "^1.6.23",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.28",
     "postgres": "^3.4.7",
-    "uuid": "^13.0.0",
+    "uuid": "^13.0.2",
     "zod": "^4.3.6"
+  },
+  "overrides": {
+    "defu": "^6.1.7",
+    "uuid": "^13.0.2"
   }
 }

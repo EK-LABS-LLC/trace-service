@@ -9,6 +9,7 @@ import type {
   AgentSessionQueryResult,
   SpanQueryFilters,
   SpanQueryResult,
+  SdkTraceIdQueryResult,
 } from "./adapter";
 
 /**
@@ -166,7 +167,7 @@ export class SqliteStorage implements StorageAdapter {
     const inserted = await this.db
       .insert(spans)
       .values({ ...span, projectId })
-      .onConflictDoNothing({ target: spans.spanId })
+      .onConflictDoNothing()
       .returning();
     if (inserted[0]) {
       return inserted[0];
@@ -177,6 +178,18 @@ export class SqliteStorage implements StorageAdapter {
       throw new Error(`Idempotent insert failed to find span ${span.spanId}`);
     }
     return existing;
+  }
+
+  async insertSpans(projectId: string, spanBatch: NewSpan[]): Promise<Span[]> {
+    const inserted: Span[] = [];
+    // Chunked multi-row inserts: each statement is atomic and stays well
+    // under SQLite's bound-parameter limit.
+    for (let i = 0; i < spanBatch.length; i += 250) {
+      const chunk = spanBatch.slice(i, i + 250).map((span) => ({ ...span, projectId }));
+      const rows = await this.db.insert(spans).values(chunk).onConflictDoNothing().returning();
+      inserted.push(...rows);
+    }
+    return inserted;
   }
 
   async getSpan(spanId: string, projectId: string): Promise<Span | null> {
@@ -193,6 +206,9 @@ export class SqliteStorage implements StorageAdapter {
 
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
+    }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
     }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));
@@ -233,7 +249,7 @@ export class SqliteStorage implements StorageAdapter {
 
   async queryAgentSessions(
     projectId: string,
-    filters: AgentSessionQueryFilters = {}
+    filters: AgentSessionQueryFilters = {},
   ): Promise<AgentSessionQueryResult> {
     const conditions = [eq(spans.projectId, projectId)];
 
@@ -309,6 +325,9 @@ export class SqliteStorage implements StorageAdapter {
     if (filters.sessionId) {
       conditions.push(eq(spans.sessionId, filters.sessionId));
     }
+    if (filters.traceId) {
+      conditions.push(eq(spans.traceId, filters.traceId));
+    }
     if (filters.source) {
       conditions.push(eq(spans.source, filters.source));
     }
@@ -333,5 +352,51 @@ export class SqliteStorage implements StorageAdapter {
       .from(spans)
       .where(and(...conditions));
     return countResult[0]?.total ?? 0;
+  }
+
+  async querySdkTraceIds(
+    projectId: string,
+    filters: TraceQueryFilters = {},
+  ): Promise<SdkTraceIdQueryResult> {
+    const conditions = [eq(spans.projectId, projectId), eq(spans.source, "sdk")];
+    if (filters.sessionId) conditions.push(eq(spans.sessionId, filters.sessionId));
+    if (filters.dateFrom) conditions.push(gte(spans.timestamp, filters.dateFrom));
+    if (filters.dateTo) conditions.push(lte(spans.timestamp, filters.dateTo));
+    const whereClause = and(...conditions);
+    const provider = sql<string>`COALESCE(MAX(CASE WHEN ${spans.kind} = 'llm_call' THEN ${spans.provider} END), 'sdk')`;
+    const model = sql<string>`COALESCE(MAX(CASE WHEN ${spans.kind} = 'llm_call' THEN ${spans.model} END), 'unknown')`;
+    const errors = sql<number>`SUM(CASE WHEN ${spans.status} = 'error' THEN 1 ELSE 0 END)`;
+    const having = and(
+      filters.provider ? sql`${provider} = ${filters.provider}` : undefined,
+      filters.model ? sql`${model} = ${filters.model}` : undefined,
+      filters.status === "error" ? sql`${errors} > 0` : undefined,
+      filters.status === "success" ? sql`${errors} = 0` : undefined,
+    );
+    const groups = this.db
+      .select({
+        traceId: spans.traceId,
+        timestamp:
+          sql<number>`COALESCE(MIN(CASE WHEN ${spans.kind} = 'llm_call' THEN ${spans.timestamp} END), MIN(${spans.timestamp}))`.as(
+            "timestamp",
+          ),
+      })
+      .from(spans)
+      .where(whereClause)
+      .groupBy(spans.traceId)
+      .having(having)
+      .as("sdk_trace_groups");
+    const [countRows, rows] = await Promise.all([
+      this.db.select({ total: count() }).from(groups),
+      this.db
+        .select({ traceId: groups.traceId })
+        .from(groups)
+        .orderBy(desc(groups.timestamp))
+        .limit(filters.limit ?? 100)
+        .offset(filters.offset ?? 0),
+    ]);
+    return {
+      traceIds: rows.map((row: { traceId: string }) => row.traceId),
+      total: countRows[0]?.total ?? 0,
+    };
   }
 }
