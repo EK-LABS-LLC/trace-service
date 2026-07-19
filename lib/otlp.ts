@@ -232,6 +232,9 @@ function capPayloadString(value: string): string {
  * report them via OTLP partialSuccess instead of rejecting the whole export.
  */
 export function extractOtlpSpans(payload: unknown): OtlpExtractResult {
+  if (payload === null || typeof payload !== "object") {
+    throw new Error("Missing resourceSpans");
+  }
   const resourceSpans = (payload as { resourceSpans?: unknown[] }).resourceSpans;
   if (!Array.isArray(resourceSpans)) {
     throw new Error("Missing resourceSpans");
@@ -243,9 +246,11 @@ export function extractOtlpSpans(payload: unknown): OtlpExtractResult {
   let totalSpans = 0;
 
   for (const resourceSpan of resourceSpans) {
+    if (resourceSpan === null || typeof resourceSpan !== "object") continue;
     const scopeSpans = (resourceSpan as { scopeSpans?: unknown[] }).scopeSpans;
     if (!Array.isArray(scopeSpans)) continue;
     for (const scopeSpan of scopeSpans) {
+      if (scopeSpan === null || typeof scopeSpan !== "object") continue;
       const rawSpans = (scopeSpan as { spans?: unknown[] }).spans;
       if (!Array.isArray(rawSpans)) continue;
       for (const rawSpan of rawSpans) {

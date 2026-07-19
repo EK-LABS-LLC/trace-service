@@ -166,5 +166,14 @@ describe("extractOtlpSpans", () => {
 
   test("throws when resourceSpans is missing", () => {
     expect(() => extractOtlpSpans({})).toThrow("Missing resourceSpans");
+    expect(() => extractOtlpSpans(null)).toThrow("Missing resourceSpans");
+  });
+
+  test("skips null resource and scope entries", () => {
+    expect(
+      extractOtlpSpans({
+        resourceSpans: [null, { scopeSpans: [null, { spans: [] }] }],
+      }),
+    ).toEqual({ spans: [], rejectedSpans: 0, errorMessage: undefined });
   });
 });
