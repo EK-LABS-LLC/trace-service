@@ -5,7 +5,7 @@ import {
   createTestProject,
   createTestTraces,
 } from "./setup";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { resolveDataPaths } from "../lib/data-paths";
 
@@ -13,14 +13,16 @@ function spanWalDir(): string {
   return process.env.WAL_SPAN_DIR ?? resolveDataPaths(process.env).walSpanDir;
 }
 
-function readSpanWalFiles(): string[] {
+async function readSpanWalFiles(): Promise<string[]> {
   const segmentsDir = join(spanWalDir(), "segments");
   if (!existsSync(segmentsDir)) return [];
 
-  return readdirSync(segmentsDir)
+  const files = readdirSync(segmentsDir)
     .filter((file) => file.endsWith(".ndjson"))
-    .sort()
-    .map((file) => readFileSync(join(segmentsDir, file), "utf-8"));
+    .sort();
+  return Promise.all(
+    files.map((file) => Bun.file(join(segmentsDir, file)).text()),
+  );
 }
 
 interface SpanWalRecord {
@@ -31,8 +33,8 @@ interface SpanWalRecord {
   };
 }
 
-function readSpanWalRecords(): SpanWalRecord[] {
-  return readSpanWalFiles().flatMap((contents) =>
+async function readSpanWalRecords(): Promise<SpanWalRecord[]> {
+  return (await readSpanWalFiles()).flatMap((contents) =>
     contents
       .split("\n")
       .filter(Boolean)
@@ -47,8 +49,8 @@ function readSpanWalRecords(): SpanWalRecord[] {
   );
 }
 
-function spanWalSequences(spanId: string): number[] {
-  return readSpanWalRecords().flatMap((record) =>
+async function spanWalSequences(spanId: string): Promise<number[]> {
+  return (await readSpanWalRecords()).flatMap((record) =>
     record.payload?.spans?.some((span) => span.span_id === spanId)
       ? [record.sequence]
       : [],
@@ -61,7 +63,7 @@ async function waitForSpanWalExport(
 ): Promise<SpanWalRecord | undefined> {
   const expectedIds = new Set(spanIds);
   for (let i = 0; i < 40; i++) {
-    const record = readSpanWalRecords().find((candidate) => {
+    const record = (await readSpanWalRecords()).find((candidate) => {
       const spans = candidate.payload?.spans ?? [];
       return (
         candidate.payload?.projectId === projectId &&
@@ -80,14 +82,14 @@ async function waitForSpanWalExport(
 
 async function waitForSpanWalContents(spanIds: string[]): Promise<string> {
   for (let i = 0; i < 30; i++) {
-    const walContents = readSpanWalFiles().join("\n");
+    const walContents = (await readSpanWalFiles()).join("\n");
     if (spanIds.every((spanId) => walContents.includes(spanId))) {
       return walContents;
     }
     await Bun.sleep(100);
   }
 
-  return readSpanWalFiles().join("\n");
+  return (await readSpanWalFiles()).join("\n");
 }
 
 async function waitForSpanWalRecords(
@@ -95,7 +97,7 @@ async function waitForSpanWalRecords(
   count: number,
 ): Promise<number[]> {
   for (let i = 0; i < 30; i++) {
-    const sequences = spanWalSequences(spanId);
+    const sequences = await spanWalSequences(spanId);
     if (sequences.length >= count) return sequences;
     await Bun.sleep(100);
   }
@@ -107,7 +109,7 @@ async function waitForSpanWalCheckpoint(sequence: number): Promise<boolean> {
   const checkpointPath = join(spanWalDir(), "wal.checkpoint");
   for (let i = 0; i < 40; i++) {
     if (existsSync(checkpointPath)) {
-      const checkpoint = JSON.parse(readFileSync(checkpointPath, "utf-8")) as {
+      const checkpoint = JSON.parse(await Bun.file(checkpointPath).text()) as {
         nextSequence: string;
       };
       if (Number(checkpoint.nextSequence) > sequence) return true;
@@ -682,7 +684,9 @@ describe("OTLP / SDK traces", () => {
       partialSuccess?: { rejectedSpans: number };
     };
     expect(data.partialSuccess?.rejectedSpans).toBe(1);
-    expect(readSpanWalFiles().join("\n")).not.toContain(rejectedProject.id);
+    expect((await readSpanWalFiles()).join("\n")).not.toContain(
+      rejectedProject.id,
+    );
   });
 
   test("POST /v1/traces rejects malformed payloads", async () => {

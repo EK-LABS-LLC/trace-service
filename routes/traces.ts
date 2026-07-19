@@ -51,9 +51,10 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
         projectId,
         spans,
       });
-    } catch {
+    } catch (err) {
       console.error(
         `[traces] POST /v1/traces - Failed to publish - project=${projectId}, count=${spans.length}`,
+        err,
       );
       return c.json({ error: "Failed to enqueue span" }, 503);
     }
