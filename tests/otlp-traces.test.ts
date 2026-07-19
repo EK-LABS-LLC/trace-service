@@ -188,10 +188,7 @@ describe("OTLP / SDK traces", () => {
                         key: "pulse.session_id",
                         value: { stringValue: sessionId },
                       },
-                      {
-                        key: "pulse.trace_id",
-                        value: { stringValue: traceId },
-                      },
+                      { key: "pulse.trace_id", value: { stringValue: traceId } },
                       {
                         key: "gen_ai.provider.name",
                         value: { stringValue: "openai" },
@@ -221,10 +218,7 @@ describe("OTLP / SDK traces", () => {
                         value: { intValue: "36" },
                       },
                       { key: "pulse.cost_cents", value: { doubleValue: 0.42 } },
-                      {
-                        key: "pulse.output_text",
-                        value: { stringValue: "Hi there" },
-                      },
+                      { key: "pulse.output_text", value: { stringValue: "Hi there" } },
                     ],
                     status: { code: 1 },
                   },
@@ -328,19 +322,10 @@ describe("OTLP / SDK traces", () => {
                   attributes: [
                     { key: "pulse.source", value: { stringValue: "sdk" } },
                     { key: "pulse.kind", value: { stringValue: "llm_call" } },
-                    {
-                      key: "pulse.event_type",
-                      value: { stringValue: "provider_call" },
-                    },
-                    {
-                      key: "pulse.session_id",
-                      value: { stringValue: sessionId },
-                    },
+                    { key: "pulse.event_type", value: { stringValue: "provider_call" } },
+                    { key: "pulse.session_id", value: { stringValue: sessionId } },
                     { key: "pulse.trace_id", value: { stringValue: traceId } },
-                    {
-                      key: "gen_ai.request.model",
-                      value: { stringValue: "gpt-4o-mini" },
-                    },
+                    { key: "gen_ai.request.model", value: { stringValue: "gpt-4o-mini" } },
                   ],
                   status: { code: 1 },
                 },
@@ -384,9 +369,7 @@ describe("OTLP / SDK traces", () => {
       spans: Array<{ spanId: string }>;
     };
     expect(detailResponse.status).toBe(200);
-    expect(detail.spans.filter((span) => span.spanId === spanId)).toHaveLength(
-      1,
-    );
+    expect(detail.spans.filter((span) => span.spanId === spanId)).toHaveLength(1);
   });
 
   test("POST /v1/traces persists all 101 spans from one OTLP export", async () => {
@@ -497,10 +480,7 @@ describe("OTLP / SDK traces", () => {
                       endTimeUnixNano: (startNs + 50_000_000n).toString(),
                       attributes: [
                         { key: "pulse.source", value: { stringValue: "sdk" } },
-                        {
-                          key: "pulse.kind",
-                          value: { stringValue: "llm_call" },
-                        },
+                        { key: "pulse.kind", value: { stringValue: "llm_call" } },
                         {
                           key: "pulse.event_type",
                           value: { stringValue: "provider_call" },

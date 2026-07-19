@@ -1,8 +1,4 @@
-import {
-  MAX_OTLP_SPANS_PER_EXPORT,
-  spanSchema,
-  type SpanInput,
-} from "../shared/validation";
+import { MAX_OTLP_SPANS_PER_EXPORT, spanSchema, type SpanInput } from "../shared/validation";
 
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 
@@ -80,10 +76,7 @@ function attrsToMap(attrs: OtlpAttribute[] | undefined): Map<string, unknown> {
   return new Map((attrs ?? []).map((attr) => [attr.key, attrValue(attr)]));
 }
 
-function stringAttr(
-  attrs: Map<string, unknown>,
-  ...keys: string[]
-): string | undefined {
+function stringAttr(attrs: Map<string, unknown>, ...keys: string[]): string | undefined {
   for (const key of keys) {
     const value = attrs.get(key);
     if (typeof value === "string" && value.length > 0) return value;
@@ -91,10 +84,7 @@ function stringAttr(
   return undefined;
 }
 
-function numberAttr(
-  attrs: Map<string, unknown>,
-  ...keys: string[]
-): number | undefined {
+function numberAttr(attrs: Map<string, unknown>, ...keys: string[]): number | undefined {
   for (const key of keys) {
     const value = attrs.get(key);
     if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -111,17 +101,12 @@ function numberAttr(
  * a bare string, a JSON-encoded array, or fall back to the raw value.
  */
 function finishReasonAttr(attrs: Map<string, unknown>): string | undefined {
-  const raw = stringAttr(
-    attrs,
-    "gen_ai.response.finish_reasons",
-    "gen_ai.response.finish_reason",
-  );
+  const raw = stringAttr(attrs, "gen_ai.response.finish_reasons", "gen_ai.response.finish_reason");
   if (!raw) return undefined;
   if (raw.startsWith("[")) {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && typeof parsed[0] === "string")
-        return parsed[0];
+      if (Array.isArray(parsed) && typeof parsed[0] === "string") return parsed[0];
     } catch {
       return raw;
     }
@@ -160,9 +145,7 @@ function otlpTimeToIso(value: string | number | undefined): string {
   if (value === undefined) return new Date().toISOString();
   try {
     const date = new Date(Number(BigInt(String(value)) / 1_000_000n));
-    return Number.isNaN(date.getTime())
-      ? new Date().toISOString()
-      : date.toISOString();
+    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
   } catch {
     return new Date().toISOString();
   }
@@ -187,28 +170,20 @@ function optionalId(value: string | undefined): string | undefined {
 
 function otlpSpanToSpanInput(span: OtlpSpan): SpanInput {
   const attrs = attrsToMap(span.attributes);
-  const traceId =
-    stringAttr(attrs, "pulse.trace_id") ?? span.traceId ?? crypto.randomUUID();
+  const traceId = stringAttr(attrs, "pulse.trace_id") ?? span.traceId ?? crypto.randomUUID();
   const eventType = stringAttr(attrs, "pulse.event_type") ?? "provider_call";
   const kind =
-    stringAttr(attrs, "pulse.kind") ??
-    (eventType === "provider_call" ? "llm_call" : "tool_use");
+    stringAttr(attrs, "pulse.kind") ?? (eventType === "provider_call" ? "llm_call" : "tool_use");
   const toolInput = capPayload(
     parsePayload(stringAttr(attrs, "pulse.tool.input", "gen_ai.tool.input")),
   );
   const toolResponse = capPayload(
-    parsePayload(
-      stringAttr(attrs, "pulse.tool.response", "gen_ai.tool.output"),
-    ),
+    parsePayload(stringAttr(attrs, "pulse.tool.response", "gen_ai.tool.output")),
   );
   const metadata: Record<string, unknown> = {};
   for (const [key, value] of attrs) {
     if (FIRST_CLASS_ATTRIBUTE_KEYS.has(key)) continue;
-    if (
-      key.startsWith("pulse.") ||
-      key.startsWith("gen_ai.") ||
-      key === "service.name"
-    ) {
+    if (key.startsWith("pulse.") || key.startsWith("gen_ai.") || key === "service.name") {
       metadata[key] = capPayload(parsePayload(value));
     }
   }
@@ -218,9 +193,7 @@ function otlpSpanToSpanInput(span: OtlpSpan): SpanInput {
   return {
     span_id: optionalId(span.spanId) ?? crypto.randomUUID(),
     trace_id: traceId,
-    session_id:
-      stringAttr(attrs, "pulse.session_id", "gen_ai.conversation.id") ??
-      traceId,
+    session_id: stringAttr(attrs, "pulse.session_id", "gen_ai.conversation.id") ?? traceId,
     parent_span_id: optionalId(span.parentSpanId),
     timestamp: otlpTimeToIso(span.startTimeUnixNano),
     duration_ms: durationMs(span.startTimeUnixNano, span.endTimeUnixNano),
@@ -232,23 +205,15 @@ function otlpSpanToSpanInput(span: OtlpSpan): SpanInput {
     tool_name: kind === "tool_use" ? (toolName ?? span.name) : undefined,
     tool_input: toolInput,
     tool_response: toolResponse,
-    error: capPayload(
-      parsePayload(stringAttr(attrs, "pulse.error", "exception.message")),
-    ),
+    error: capPayload(parsePayload(stringAttr(attrs, "pulse.error", "exception.message"))),
     model: stringAttr(attrs, "gen_ai.request.model", "gen_ai.response.model"),
-    provider: stringAttr(
-      attrs,
-      "gen_ai.provider.name",
-      "gen_ai.system",
-      "pulse.provider",
-    ),
+    provider: stringAttr(attrs, "gen_ai.provider.name", "gen_ai.system", "pulse.provider"),
     model_used: stringAttr(attrs, "gen_ai.response.model"),
     input_tokens: numberAttr(attrs, "gen_ai.usage.input_tokens"),
     output_tokens: numberAttr(attrs, "gen_ai.usage.output_tokens"),
     cost_cents: numberAttr(attrs, "pulse.cost_cents"),
     finish_reason: finishReasonAttr(attrs),
-    output_text:
-      outputText === undefined ? undefined : capPayloadString(outputText),
+    output_text: outputText === undefined ? undefined : capPayloadString(outputText),
     provider_request_id: stringAttr(attrs, "gen_ai.response.id"),
     metadata,
   };
@@ -257,9 +222,7 @@ function otlpSpanToSpanInput(span: OtlpSpan): SpanInput {
 function capPayloadString(value: string): string {
   const bytes = new TextEncoder().encode(value);
   if (bytes.byteLength <= MAX_PAYLOAD_BYTES) return value;
-  return new TextDecoder()
-    .decode(bytes.slice(0, MAX_PAYLOAD_BYTES))
-    .replace(/�+$/, "");
+  return new TextDecoder().decode(bytes.slice(0, MAX_PAYLOAD_BYTES)).replace(/�+$/, "");
 }
 
 /**
@@ -269,8 +232,7 @@ function capPayloadString(value: string): string {
  * report them via OTLP partialSuccess instead of rejecting the whole export.
  */
 export function extractOtlpSpans(payload: unknown): OtlpExtractResult {
-  const resourceSpans = (payload as { resourceSpans?: unknown[] })
-    .resourceSpans;
+  const resourceSpans = (payload as { resourceSpans?: unknown[] }).resourceSpans;
   if (!Array.isArray(resourceSpans)) {
     throw new Error("Missing resourceSpans");
   }
@@ -292,9 +254,7 @@ export function extractOtlpSpans(payload: unknown): OtlpExtractResult {
           throw new Error(`Export exceeds ${MAX_OTLP_SPANS_PER_EXPORT} spans`);
         }
         try {
-          const parsed = spanSchema.safeParse(
-            otlpSpanToSpanInput(rawSpan as OtlpSpan),
-          );
+          const parsed = spanSchema.safeParse(otlpSpanToSpanInput(rawSpan as OtlpSpan));
           if (parsed.success) {
             spans.push(parsed.data);
             continue;
@@ -303,8 +263,7 @@ export function extractOtlpSpans(payload: unknown): OtlpExtractResult {
           errorMessage ??= parsed.error.issues[0]?.message;
         } catch (err) {
           rejectedSpans += 1;
-          errorMessage ??=
-            err instanceof Error ? err.message : "Malformed span";
+          errorMessage ??= err instanceof Error ? err.message : "Malformed span";
         }
       }
     }
