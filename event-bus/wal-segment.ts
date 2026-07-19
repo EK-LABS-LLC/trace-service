@@ -4,6 +4,7 @@ import {
   statSync,
   openSync,
   closeSync,
+  fsyncSync,
   writeSync,
   readFileSync,
 } from "node:fs";
@@ -142,6 +143,7 @@ export class WALSegment {
    */
   sync(): void {
     if (this.fd !== undefined) {
+      fsyncSync(this.fd);
       closeSync(this.fd);
       this.fd = undefined;
     }
