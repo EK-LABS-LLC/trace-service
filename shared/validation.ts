@@ -204,10 +204,19 @@ export const spanSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+/** Maximum spans accepted from one OTLP export and stored in one WAL event. */
+export const MAX_OTLP_SPANS_PER_EXPORT = 1000;
+
 /**
  * Batch span schema - array of spans with max 100 items
  */
 export const batchSpanSchema = z.array(spanSchema).max(100);
+
+/**
+ * Span WAL payload schema - validates one complete OTLP export independently
+ * from the public span HTTP batch limit.
+ */
+export const walSpanBatchSchema = z.array(spanSchema).max(MAX_OTLP_SPANS_PER_EXPORT);
 
 /**
  * Query params schema for GET /v1/spans

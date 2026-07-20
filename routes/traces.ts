@@ -1,7 +1,6 @@
 import type { Context } from "hono";
 import { storage } from "../db";
 import { ingestTraces, queryTraces, getTrace } from "../services/traces";
-import { ingestSpanBatch } from "../services/spans";
 import {
   getSdkTraceSummary,
   querySdkTraceSummaries,
@@ -11,12 +10,12 @@ import { extractOtlpSpans } from "../lib/otlp";
 import { ZodError } from "zod";
 import { traceQuerySchema, batchTraceSchema } from "../shared/validation";
 import type { TraceInput } from "../shared/validation";
-import { getEventBus } from "../event-bus/client";
-import { buildTraceIngestSubject } from "../event-bus/subjects";
+import { getEventBus, getSpanEventBus } from "../event-bus/client";
+import { buildSpanIngestSubject, buildTraceIngestSubject } from "../event-bus/subjects";
 
 /**
  * Handler for POST /v1/traces
- * Accepts an OTLP/HTTP JSON traces payload and stores Pulse SDK spans.
+ * Accepts an OTLP/HTTP JSON traces payload and queues Pulse SDK spans.
  *
  * Responds per the OTLP spec: 200 with an empty ExportTraceServiceResponse on
  * full success, 200 with partialSuccess when some spans were dropped, and 400
@@ -39,28 +38,37 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
     return c.json({ error: err instanceof Error ? err.message : "Invalid OTLP payload" }, 400);
   }
 
-  try {
-    const { spans, rejectedSpans, errorMessage } = extracted;
-    const { count, skipped } = await ingestSpanBatch(projectId, spans, storage);
-    console.log(
-      `[traces] POST /v1/traces - SUCCESS - project=${projectId}, ingested=${count}, skipped=${skipped}, rejected=${rejectedSpans}`,
-    );
-    if (rejectedSpans > 0) {
-      return c.json(
-        {
-          partialSuccess: {
-            rejectedSpans,
-            errorMessage: errorMessage ?? "Spans failed validation",
-          },
-        },
-        200,
+  const { spans, rejectedSpans, errorMessage } = extracted;
+  if (spans.length > 0) {
+    try {
+      await getSpanEventBus().publish(buildSpanIngestSubject(projectId), {
+        projectId,
+        spans,
+      });
+    } catch (err) {
+      console.error(
+        `[traces] POST /v1/traces - Failed to publish - project=${projectId}, count=${spans.length}`,
+        err,
       );
+      return c.json({ error: "Failed to enqueue span" }, 503);
     }
-    return c.json({}, 200);
-  } catch (err) {
-    console.error(`[traces] POST /v1/traces - ERROR - project=${projectId}`, err);
-    throw err;
   }
+
+  console.log(
+    `[traces] POST /v1/traces - SUCCESS - project=${projectId}, queued=${spans.length}, rejected=${rejectedSpans}`,
+  );
+  if (rejectedSpans > 0) {
+    return c.json(
+      {
+        partialSuccess: {
+          rejectedSpans,
+          errorMessage: errorMessage ?? "Spans failed validation",
+        },
+      },
+      200,
+    );
+  }
+  return c.json({}, 200);
 }
 
 /**

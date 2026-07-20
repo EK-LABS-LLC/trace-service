@@ -1,4 +1,4 @@
-import { batchSpanSchema } from "../shared/validation";
+import { walSpanBatchSchema } from "../shared/validation";
 import { storage } from "../db";
 import { ingestSpanBatchIdempotent } from "../services/spans";
 import { WALReader, WALIndex, type WALConfig } from "./wal";
@@ -102,7 +102,7 @@ export class SpanStreamListener {
       throw new Error("Span event missing projectId");
     }
 
-    const spans = batchSpanSchema.parse(payload.spans);
+    const spans = walSpanBatchSchema.parse(payload.spans);
     await ingestSpanBatchIdempotent(payload.projectId, spans, storage);
   }
 }

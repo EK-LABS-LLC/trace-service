@@ -107,6 +107,106 @@ describe("extractOtlpSpans", () => {
     expect(metadata["pulse.request"]).toEqual({ model: "gpt-4o" });
   });
 
+  test("maps canonical CLI agent attributes and structured AnyValues", () => {
+    const startNs = BigInt(Date.now()) * 1_000_000n;
+    const { spans, rejectedSpans } = extractOtlpSpans(
+      otlpPayload([
+        {
+          traceId: TRACE_ID,
+          spanId: SPAN_ID,
+          parentSpanId: PARENT_SPAN_ID,
+          name: "agent.tool",
+          startTimeUnixNano: startNs.toString(),
+          endTimeUnixNano: startNs.toString(),
+          attributes: [
+            { key: "pulse.source", value: { stringValue: "codex" } },
+            { key: "pulse.kind", value: { stringValue: "tool_use" } },
+            {
+              key: "pulse.event_type",
+              value: { stringValue: "post_tool_use" },
+            },
+            { key: "pulse.session_id", value: { stringValue: "session-1" } },
+            {
+              key: "pulse.session_name",
+              value: { stringValue: "Agent session" },
+            },
+            { key: "pulse.cwd", value: { stringValue: "/workspace" } },
+            { key: "pulse.model", value: { stringValue: "gpt-5" } },
+            { key: "pulse.is_interrupt", value: { boolValue: false } },
+            { key: "pulse.agent.name", value: { stringValue: "explore" } },
+            { key: "pulse.tool.id", value: { stringValue: "tool-1" } },
+            { key: "pulse.tool.name", value: { stringValue: "shell" } },
+            {
+              key: "pulse.tool.input",
+              value: {
+                kvlistValue: {
+                  values: [
+                    { key: "command", value: { stringValue: "pwd" } },
+                    {
+                      key: "flags",
+                      value: {
+                        arrayValue: {
+                          values: [
+                            { stringValue: "-P" },
+                            { stringValue: "--logical" },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+            {
+              key: "pulse.tool.response",
+              value: {
+                kvlistValue: {
+                  values: [
+                    { key: "stdout", value: { stringValue: "/workspace" } },
+                  ],
+                },
+              },
+            },
+            {
+              key: "pulse.metadata",
+              value: {
+                kvlistValue: {
+                  values: [
+                    { key: "cli_version", value: { stringValue: "0.2.16" } },
+                    { key: "project_id", value: { stringValue: "project-1" } },
+                  ],
+                },
+              },
+            },
+          ],
+          status: { code: 1 },
+        },
+      ]),
+    );
+
+    expect(rejectedSpans).toBe(0);
+    expect(spans[0]).toMatchObject({
+      session_id: "session-1",
+      source: "codex",
+      kind: "tool_use",
+      event_type: "post_tool_use",
+      status: "success",
+      cwd: "/workspace",
+      model: "gpt-5",
+      is_interrupt: false,
+      agent_name: "explore",
+      tool_use_id: "tool-1",
+      tool_name: "shell",
+      tool_input: { command: "pwd", flags: ["-P", "--logical"] },
+      tool_response: { stdout: "/workspace" },
+      metadata: {
+        cli_version: "0.2.16",
+        project_id: "project-1",
+        session_name: "Agent session",
+      },
+    });
+  });
+
   test("counts invalid spans as rejected instead of failing the export", () => {
     const startNs = BigInt(Date.now()) * 1_000_000n;
     const { spans, rejectedSpans, errorMessage } = extractOtlpSpans(
@@ -166,5 +266,14 @@ describe("extractOtlpSpans", () => {
 
   test("throws when resourceSpans is missing", () => {
     expect(() => extractOtlpSpans({})).toThrow("Missing resourceSpans");
+    expect(() => extractOtlpSpans(null)).toThrow("Missing resourceSpans");
+  });
+
+  test("skips null resource and scope entries", () => {
+    expect(
+      extractOtlpSpans({
+        resourceSpans: [null, { scopeSpans: [null, { spans: [] }] }],
+      }),
+    ).toEqual({ spans: [], rejectedSpans: 0, errorMessage: undefined });
   });
 });

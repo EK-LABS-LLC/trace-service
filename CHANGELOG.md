@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Accept Canonical Agent OTLP Attributes
+
+Date: 2026-07-19 15:40 CDT; Status: Completed; PR: #17 https://github.com/EK-LABS-LLC/trace-service/pull/17
+Task: Make the OTLP ingest contract preserve the structured agent telemetry emitted by trace-cli.
+Added/Changed: OTLP AnyValue decoding now supports nested arrays and key-value lists, maps canonical agent fields into first-class span columns, and flattens `pulse.metadata` into span metadata.
+
+### Make WAL Acknowledgments Durable
+
+Date: 2026-07-19 14:53 CDT; Status: Completed; PR: #17 https://github.com/EK-LABS-LLC/trace-service/pull/17
+Task: Ensure accepted WAL records reach stable storage before successful ingestion responses under the default sync configuration.
+Fixed: WAL segment syncs now fsync the active descriptor before closing it and propagate durability failures to callers.
+
 ### Fix Sessions Agent Dashboard
 
 Date: 2026-07-05 10:00 CDT; Status: Completed; PR: #13 https://github.com/EK-LABS-LLC/trace-service/pull/13
