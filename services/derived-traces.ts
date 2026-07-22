@@ -1,28 +1,65 @@
-import type { StorageAdapter, TraceQueryFilters } from "../db/adapter";
+import type {
+  StorageAdapter,
+  TraceQueryFilters,
+  SpanQueryFilters,
+} from "../db/adapter";
 import type { Span } from "../db/schema";
 
 const SPAN_PAGE_SIZE = 500;
 
-export interface SdkTraceSummary {
+export interface TraceSummary {
   traceId: string;
   sessionId: string;
   timestamp: Date | string;
   latencyMs: number;
-  provider: string;
-  modelRequested: string;
-  modelUsed: string;
+  source: string;
+  spanCount: number;
+  summary: string;
+  toolCallCount: number;
+  filesEdited: number;
+  provider: string | null;
+  modelRequested: string | null;
+  modelUsed: string | null;
   providerRequestId: string | undefined;
   requestBody: unknown;
   responseBody: unknown;
-  inputTokens: number | undefined;
-  outputTokens: number | undefined;
+  inputTokens: number | null;
+  outputTokens: number | null;
   outputText: string | undefined;
   finishReason: string | undefined;
   status: "success" | "error";
   error: unknown;
-  costCents: number | undefined;
+  costCents: number | null;
   metadata: Record<string, unknown>;
   spans: Array<Span & { label: string }>;
+}
+
+export const EDIT_TOOL_NAMES = new Set([
+  "Edit",
+  "Write",
+  "MultiEdit",
+  "apply_patch",
+]);
+
+function editedFilePath(span: Span): string | undefined {
+  if (!span.toolName || !EDIT_TOOL_NAMES.has(span.toolName)) return undefined;
+  const input = span.toolInput;
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const fp = (input as Record<string, unknown>).file_path;
+    if (typeof fp === "string" && fp.length > 0) return fp;
+  }
+  return undefined;
+}
+
+function buildSummary(
+  isLlm: boolean,
+  model: string,
+  toolCallCount: number,
+  filesEdited: number,
+): string {
+  if (isLlm) return model;
+  const base = `${toolCallCount} tool calls`;
+  return filesEdited > 0 ? `${base} · ${filesEdited} files edited` : base;
 }
 
 function spanMetadata(span: Span): Record<string, unknown> {
@@ -40,7 +77,10 @@ function spanLabel(span: Span): string {
 function sdkProvider(span: Span): string {
   if (span.provider) return span.provider;
   const metadata = spanMetadata(span);
-  const provider = metadata["pulse.provider"] ?? metadata.provider ?? metadata["gen_ai.system"];
+  const provider =
+    metadata["pulse.provider"] ??
+    metadata.provider ??
+    metadata["gen_ai.system"];
   return typeof provider === "string" ? provider : "sdk";
 }
 
@@ -53,22 +93,46 @@ function timestampMs(value: Date | string | number): number {
 /**
  * Derive a dashboard-compatible trace summary from SDK spans sharing a trace_id.
  */
-export function deriveTraceSummary(traceId: string, traceSpans: Span[]): SdkTraceSummary {
+export function deriveTraceSummary(
+  traceId: string,
+  traceSpans: Span[],
+): TraceSummary {
   const sorted = [...traceSpans].sort(
     (a, b) => timestampMs(a.timestamp) - timestampMs(b.timestamp),
   );
-  const providerSpan = sorted.find((span) => span.kind === "llm_call") ?? sorted[0]!;
+  const providerSpan =
+    sorted.find((span) => span.kind === "llm_call") ?? sorted[0]!;
   const metadata = spanMetadata(providerSpan);
   const requestBody = metadata["pulse.request"] ?? metadata.request;
   const responseBody = metadata["pulse.response"] ?? metadata.response;
   const toolIds = new Set(
-    sorted.filter((span) => span.kind === "tool_use").map((span) => span.toolUseId ?? span.spanId),
+    sorted
+      .filter((span) => span.kind === "tool_use")
+      .map((span) => span.toolUseId ?? span.spanId),
   );
 
+  const isLlm = sorted.some((span) => span.kind === "llm_call");
+  const toolSpans = sorted.filter((span) => span.kind === "tool_use");
+  const toolCallCount = new Set(
+    toolSpans.map((span) => span.toolUseId ?? span.spanId),
+  ).size;
+  const filesEdited = new Set(
+    toolSpans
+      .map(editedFilePath)
+      .filter((path): path is string => path !== undefined),
+  ).size;
+  const model = providerSpan.model ?? "unknown";
+
   const llmSpans = sorted.filter((span) => span.kind === "llm_call");
-  const sumTokens = (select: (span: Span) => number | null | undefined): number | undefined => {
-    const values = llmSpans.map(select).filter((value): value is number => value != null);
-    return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) : undefined;
+  const sumTokens = (
+    select: (span: Span) => number | null | undefined,
+  ): number | undefined => {
+    const values = llmSpans
+      .map(select)
+      .filter((value): value is number => value != null);
+    return values.length > 0
+      ? values.reduce((sum, value) => sum + value, 0)
+      : undefined;
   };
 
   return {
@@ -76,19 +140,18 @@ export function deriveTraceSummary(traceId: string, traceSpans: Span[]): SdkTrac
     sessionId: providerSpan.sessionId,
     timestamp: providerSpan.timestamp,
     latencyMs: sorted.reduce((sum, span) => sum + (span.durationMs ?? 0), 0),
-    provider: sdkProvider(providerSpan),
-    modelRequested: providerSpan.model ?? "unknown",
-    modelUsed: providerSpan.modelUsed ?? providerSpan.model ?? "unknown",
+    source: providerSpan.source,
+    spanCount: sorted.length,
+    summary: buildSummary(isLlm, model, toolCallCount, filesEdited),
+    toolCallCount,
+    filesEdited,
     providerRequestId: providerSpan.providerRequestId ?? undefined,
-    requestBody,
-    responseBody,
-    inputTokens: sumTokens((span) => span.inputTokens),
-    outputTokens: sumTokens((span) => span.outputTokens),
     outputText: providerSpan.outputText ?? undefined,
     finishReason: providerSpan.finishReason ?? undefined,
-    status: sorted.some((span) => span.status === "error") ? "error" : "success",
+    status: sorted.some((span) => span.status === "error")
+      ? "error"
+      : "success",
     error: sorted.find((span) => span.error)?.error,
-    costCents: sumTokens((span) => span.costCents),
     metadata: {
       ...metadata,
       toolCalls: toolIds.size,
@@ -97,6 +160,17 @@ export function deriveTraceSummary(traceId: string, traceSpans: Span[]): SdkTrac
       ...span,
       label: spanLabel(span),
     })),
+    // LLM fields become null (not undefined) for agent traces:
+    provider: isLlm ? sdkProvider(providerSpan) : null,
+    modelRequested: isLlm ? model : null,
+    modelUsed: isLlm ? (providerSpan.modelUsed ?? model) : null,
+    inputTokens: isLlm ? (sumTokens((span) => span.inputTokens) ?? null) : null,
+    outputTokens: isLlm
+      ? (sumTokens((span) => span.outputTokens) ?? null)
+      : null,
+    costCents: isLlm ? (sumTokens((span) => span.costCents) ?? null) : null,
+    requestBody: isLlm ? requestBody : null,
+    responseBody: isLlm ? responseBody : null,
   };
 }
 
@@ -106,6 +180,7 @@ async function queryAllSdkSpans(
   filters: {
     sessionId?: string;
     traceId?: string;
+    source?: string;
     status?: "success" | "error";
     dateFrom?: Date;
     dateTo?: Date;
@@ -118,7 +193,7 @@ async function queryAllSdkSpans(
     const page = await storage.querySpans(projectId, {
       sessionId: filters.sessionId,
       traceId: filters.traceId,
-      source: "sdk",
+      source: filters.source as SpanQueryFilters["source"],
       status: filters.status,
       dateFrom: filters.dateFrom,
       dateTo: filters.dateTo,
@@ -147,59 +222,31 @@ function groupSpansByTraceId(spans: Span[]): Map<string, Span[]> {
   return groups;
 }
 
-function matchesTraceFilters(
-  summary: SdkTraceSummary,
-  filters: Pick<TraceQueryFilters, "provider" | "model" | "status">,
-): boolean {
-  if (filters.provider && summary.provider !== filters.provider) return false;
-  if (filters.model && summary.modelRequested !== filters.model) return false;
-  if (filters.status && summary.status !== filters.status) return false;
-  return true;
-}
-
-/**
- * Build all SDK-derived trace summaries for a project matching the given filters.
- */
-export async function listSdkTraceSummaries(
+/** Fetch a bounded page of traces (all sources) while grouping/counting in storage. */
+export async function queryTraceSummaries(
   projectId: string,
   storage: StorageAdapter,
   filters: TraceQueryFilters = {},
-): Promise<SdkTraceSummary[]> {
-  const spans = await queryAllSdkSpans(projectId, storage, {
-    sessionId: filters.sessionId,
-    dateFrom: filters.dateFrom,
-    dateTo: filters.dateTo,
-  });
-
-  return [...groupSpansByTraceId(spans).entries()]
-    .map(([traceId, traceSpans]) => deriveTraceSummary(traceId, traceSpans))
-    .filter((summary) => matchesTraceFilters(summary, filters))
-    .sort((a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp));
-}
-
-/** Fetch a bounded page of SDK traces while grouping/counting in storage. */
-export async function querySdkTraceSummaries(
-  projectId: string,
-  storage: StorageAdapter,
-  filters: TraceQueryFilters = {},
-): Promise<{ traces: SdkTraceSummary[]; total: number }> {
-  const page = await storage.querySdkTraceIds(projectId, filters);
+): Promise<{ traces: TraceSummary[]; total: number }> {
+  const page = await storage.queryTraceIds(projectId, filters);
   const traces = (
     await Promise.all(
-      page.traceIds.map((traceId) => getSdkTraceSummary(traceId, projectId, storage)),
+      page.traceIds.map((traceId) =>
+        getTraceSummary(traceId, projectId, storage),
+      ),
     )
-  ).filter((summary): summary is SdkTraceSummary => summary !== null);
+  ).filter((summary): summary is TraceSummary => summary !== null);
   return { traces, total: page.total };
 }
 
 /**
- * Build SDK-derived trace summaries for a single session (ascending by timestamp).
+ * Build trace summaries for a single session, across all sources (ascending by timestamp).
  */
-export async function listSdkSessionTraceSummaries(
+export async function listSessionTraceSummaries(
   sessionId: string,
   projectId: string,
   storage: StorageAdapter,
-): Promise<SdkTraceSummary[]> {
+): Promise<TraceSummary[]> {
   const spans = await queryAllSdkSpans(projectId, storage, { sessionId });
   return [...groupSpansByTraceId(spans).entries()]
     .map(([traceId, traceSpans]) => deriveTraceSummary(traceId, traceSpans))
@@ -209,35 +256,12 @@ export async function listSdkSessionTraceSummaries(
 /**
  * Look up a single SDK-derived trace by id, or null if no matching spans exist.
  */
-export async function getSdkTraceSummary(
+export async function getTraceSummary(
   traceId: string,
   projectId: string,
   storage: StorageAdapter,
-): Promise<SdkTraceSummary | null> {
+): Promise<TraceSummary | null> {
   const spans = await queryAllSdkSpans(projectId, storage, { traceId });
   if (spans.length === 0) return null;
   return deriveTraceSummary(traceId, spans);
-}
-
-/**
- * Merge legacy traces with SDK-derived summaries, then apply offset/limit.
- */
-export function mergeTracePages<T extends { timestamp: Date | string | number }>(
-  sdkTraces: T[],
-  legacyTraces: T[],
-  filters: { limit?: number; offset?: number },
-  totals?: { sdk: number; legacy: number },
-): { traces: T[]; total: number; limit: number; offset: number } {
-  const offset = filters.offset ?? 0;
-  const limit = filters.limit ?? 100;
-  const combined = [...sdkTraces, ...legacyTraces].sort(
-    (a, b) => timestampMs(b.timestamp) - timestampMs(a.timestamp),
-  );
-
-  return {
-    traces: combined.slice(offset, offset + limit),
-    total: totals ? totals.sdk + totals.legacy : combined.length,
-    limit,
-    offset,
-  };
 }

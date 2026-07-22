@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  deriveTraceSummary,
-  mergeTracePages,
-} from "./sdk-traces";
+import { deriveTraceSummary } from "./derived-traces";
 
-describe("sdk-traces", () => {
+describe("derived-traces", () => {
   test("deriveTraceSummary prefers llm_call span and aggregates tool calls", () => {
     const summary = deriveTraceSummary("trace-1", [
       {
@@ -88,27 +85,5 @@ describe("sdk-traces", () => {
     expect(summary.metadata.toolCalls).toBe(1);
     expect(summary.spans).toHaveLength(2);
     expect(summary.spans[0]?.spanId).toBe("llm-1");
-  });
-
-  test("mergeTracePages sorts descending and applies offset/limit", () => {
-    const page = mergeTracePages(
-      [
-        { traceId: "sdk-new", timestamp: "2026-01-01T00:00:03.000Z" },
-        { traceId: "sdk-old", timestamp: "2026-01-01T00:00:01.000Z" },
-      ],
-      [
-        { traceId: "legacy-mid", timestamp: "2026-01-01T00:00:02.000Z" },
-        { traceId: "legacy-oldest", timestamp: "2026-01-01T00:00:00.000Z" },
-      ],
-      { limit: 2, offset: 1 },
-    );
-
-    expect(page.total).toBe(4);
-    expect(page.limit).toBe(2);
-    expect(page.offset).toBe(1);
-    expect(page.traces.map((trace) => trace.traceId)).toEqual([
-      "legacy-mid",
-      "sdk-old",
-    ]);
   });
 });

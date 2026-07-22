@@ -1,17 +1,14 @@
 import type { Context } from "hono";
 import { storage } from "../db";
-import { ingestTraces, queryTraces, getTrace } from "../services/traces";
 import {
-  getSdkTraceSummary,
-  querySdkTraceSummaries,
-  mergeTracePages,
-} from "../services/sdk-traces";
+  getTraceSummary,
+  queryTraceSummaries,
+} from "../services/derived-traces";
 import { extractOtlpSpans } from "../lib/otlp";
 import { ZodError } from "zod";
-import { traceQuerySchema, batchTraceSchema } from "../shared/validation";
-import type { TraceInput } from "../shared/validation";
-import { getEventBus, getSpanEventBus } from "../event-bus/client";
-import { buildSpanIngestSubject, buildTraceIngestSubject } from "../event-bus/subjects";
+import { traceQuerySchema } from "../shared/validation";
+import { getSpanEventBus } from "../event-bus/client";
+import { buildSpanIngestSubject } from "../event-bus/subjects";
 
 /**
  * Handler for POST /v1/traces
@@ -35,7 +32,10 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
   try {
     extracted = extractOtlpSpans(body);
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "Invalid OTLP payload" }, 400);
+    return c.json(
+      { error: err instanceof Error ? err.message : "Invalid OTLP payload" },
+      400,
+    );
   }
 
   const { spans, rejectedSpans, errorMessage } = extracted;
@@ -72,93 +72,6 @@ export async function handleOtlpTraces(c: Context): Promise<Response> {
 }
 
 /**
- * Handler for POST /v1/traces/batch
- * Ingests a batch of traces for the authenticated project.
- */
-export async function handleBatchTraces(c: Context): Promise<Response> {
-  const projectId = c.get("projectId") as string;
-
-  console.log(`[traces] POST /v1/traces/batch - project=${projectId}`);
-
-  let body: unknown;
-  try {
-    body = await c.req.json();
-  } catch {
-    console.error(`[traces] POST /v1/traces/batch - Invalid JSON body - project=${projectId}`);
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  try {
-    const result = await ingestTraces(projectId, body, storage);
-    console.log(
-      `[traces] POST /v1/traces/batch - SUCCESS - project=${projectId}, count=${result.count}`,
-    );
-    return c.json(result, 202);
-  } catch (err) {
-    if (err instanceof ZodError) {
-      console.error(
-        `[traces] POST /v1/traces/batch - Validation failed - project=${projectId}, errors=${JSON.stringify(err.issues)}`,
-      );
-      return c.json({ error: "Validation failed", details: err.issues }, 400);
-    }
-    console.error(`[traces] POST /v1/traces/batch - ERROR - project=${projectId}`, err);
-    throw err;
-  }
-}
-
-/**
- * Handler for POST /v1/traces/async
- * Publishes traces to the NATS stream for asynchronous processing.
- */
-export async function handleAsyncTrace(c: Context): Promise<Response> {
-  const projectId = c.get("projectId") as string;
-
-  console.log(`[traces] POST /v1/traces/async - project=${projectId}`);
-
-  let payload: unknown;
-  try {
-    payload = await c.req.json();
-  } catch {
-    console.error(`[traces] POST /v1/traces/async - Invalid JSON body - project=${projectId}`);
-    return c.json({ error: "Invalid JSON body" }, 400);
-  }
-
-  let traces: TraceInput[];
-  try {
-    traces = batchTraceSchema.parse(payload);
-  } catch (err) {
-    if (err instanceof ZodError) {
-      console.error(
-        `[traces] POST /v1/traces/async - Validation failed - project=${projectId}, errors=${JSON.stringify(err.issues)}`,
-      );
-      return c.json({ error: "Validation failed", details: err.issues }, 400);
-    }
-    throw err;
-  }
-
-  console.log(
-    `[traces] POST /v1/traces/async - session_ids=${JSON.stringify(traces.map((trace) => trace.session_id))}`,
-  );
-
-  try {
-    await getEventBus().publish(buildTraceIngestSubject(projectId), {
-      projectId,
-      traces,
-    });
-    console.log(
-      `[traces] POST /v1/traces/async - SUCCESS - project=${projectId}, queued=${traces.length}`,
-    );
-    return c.json({ status: "queued", count: traces.length }, 202);
-  } catch (err) {
-    console.error(
-      `[traces] POST /v1/traces/async - Failed to publish - project=${projectId}, count=${traces.length}`,
-      err,
-    );
-    return c.json({ error: "Failed to enqueue trace" }, 503);
-  }
-}
-
-/**
  * Handler for GET /v1/traces
  * Query traces for the authenticated project with optional filters.
  */
@@ -166,7 +79,9 @@ export async function getTraces(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
   const rawQuery = c.req.query();
 
-  console.log(`[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`);
+  console.log(
+    `[traces] GET /v1/traces - project=${projectId}, query=${JSON.stringify(rawQuery)}`,
+  );
 
   let params;
   try {
@@ -176,7 +91,10 @@ export async function getTraces(c: Context): Promise<Response> {
       console.error(
         `[traces] GET /v1/traces - Invalid query params - project=${projectId}, errors=${JSON.stringify(err.issues)}`,
       );
-      return c.json({ error: "Invalid query parameters", details: err.issues }, 400);
+      return c.json(
+        { error: "Invalid query parameters", details: err.issues },
+        400,
+      );
     }
     throw err;
   }
@@ -197,7 +115,10 @@ export async function getTraces(c: Context): Promise<Response> {
     if (!trimmed) return undefined;
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-      const iso = boundary === "start" ? `${trimmed}T00:00:00.000Z` : `${trimmed}T23:59:59.999Z`;
+      const iso =
+        boundary === "start"
+          ? `${trimmed}T00:00:00.000Z`
+          : `${trimmed}T23:59:59.999Z`;
       const date = new Date(iso);
       return Number.isNaN(date.getTime()) ? undefined : date;
     }
@@ -226,6 +147,7 @@ export async function getTraces(c: Context): Promise<Response> {
 
   const filters = {
     sessionId: params.session_id,
+    source: params.source,
     provider: params.provider,
     model: params.model,
     status: params.status,
@@ -235,33 +157,19 @@ export async function getTraces(c: Context): Promise<Response> {
     offset: params.offset,
   };
 
-  const filterWithoutPage = {
-    sessionId: filters.sessionId,
-    provider: filters.provider,
-    model: filters.model,
-    status: filters.status,
-    dateFrom: filters.dateFrom,
-    dateTo: filters.dateTo,
-  };
-  // Each source only needs its first offset + limit rows to produce the merged page.
-  const windowSize = (filters.offset ?? 0) + (filters.limit ?? 100);
-  const [sdkResult, legacyResult] = await Promise.all([
-    querySdkTraceSummaries(projectId, storage, {
-      ...filterWithoutPage,
-      limit: windowSize,
-      offset: 0,
-    }),
-    queryTraces(projectId, { ...filterWithoutPage, limit: windowSize, offset: 0 }, storage),
-  ]);
-
-  const page = mergeTracePages(sdkResult.traces, legacyResult.traces, filters, {
-    sdk: sdkResult.total,
-    legacy: legacyResult.total,
-  });
+  const page = await queryTraceSummaries(projectId, storage, filters);
   console.log(
     `[traces] GET /v1/traces - SUCCESS - project=${projectId}, returned=${page.traces.length}, total=${page.total}`,
   );
-  return c.json(page, 200);
+  return c.json(
+    {
+      traces: page.traces,
+      total: page.total,
+      limit: params.limit,
+      offset: params.offset,
+    },
+    200,
+  );
 }
 
 /**
@@ -275,15 +183,13 @@ export async function getTraceById(c: Context): Promise<Response> {
     return c.json({ error: "Trace id is required" }, 400);
   }
 
-  console.log(`[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`);
+  console.log(
+    `[traces] GET /v1/traces/:id - project=${projectId}, trace_id=${traceId}`,
+  );
 
-  const trace = await getTrace(traceId, projectId, storage);
+  const trace = await getTraceSummary(traceId, projectId, storage);
 
   if (!trace) {
-    const sdkTrace = await getSdkTraceSummary(traceId, projectId, storage);
-    if (sdkTrace) {
-      return c.json(sdkTrace, 200);
-    }
     console.warn(
       `[traces] GET /v1/traces/:id - NOT FOUND - project=${projectId}, trace_id=${traceId}`,
     );

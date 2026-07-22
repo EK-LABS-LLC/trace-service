@@ -18,7 +18,7 @@ import {
   handleGetProjectUsers,
   handleCreateProjectUser,
 } from "./dashboard-users";
-import { handleBatchTraces, getTraces, getTraceById } from "./traces";
+import { getTraces, getTraceById } from "./traces";
 import { handleGetSessionTraces, handleGetSessionSpans } from "./sessions";
 import { handleGetAnalytics, handleGetSpanAnalytics } from "./analytics";
 import { getAgentSessions } from "./agent-sessions";
@@ -71,7 +71,6 @@ dashboard.post(
   requireProjectAdmin,
   handleCreateProjectUser,
 );
-dashboard.post("/traces/batch", projectContextMiddleware, handleBatchTraces);
 dashboard.get("/traces", projectContextMiddleware, getTraces);
 dashboard.get("/traces/:id", projectContextMiddleware, getTraceById);
 dashboard.get(

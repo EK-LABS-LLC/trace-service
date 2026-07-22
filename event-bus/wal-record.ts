@@ -1,6 +1,6 @@
-import type { SpanIngestEventPayload, TraceIngestEventPayload } from "./subjects";
+import type { SpanIngestEventPayload } from "./subjects";
 
-export type WALPayload = TraceIngestEventPayload | SpanIngestEventPayload;
+export type WALPayload = SpanIngestEventPayload;
 
 export interface WALRecord {
   sequence: number;

@@ -17,11 +17,7 @@ interface TracesTableProps {
 }
 
 type SortField =
-  | "timestamp"
-  | "latencyMs"
-  | "inputTokens"
-  | "outputTokens"
-  | "costCents";
+  "timestamp" | "latencyMs" | "inputTokens" | "outputTokens" | "costCents";
 type SortDirection = "asc" | "desc";
 
 const SortIcon = ({
@@ -106,6 +102,16 @@ const formatTokens = (tokens: number | null | undefined) => {
   if (tokens === null || tokens === undefined) return "--";
   return tokens.toLocaleString();
 };
+
+const SOURCE_LABELS: Record<string, string> = {
+  claude_code: "Claude Code",
+  codex: "Codex",
+  opencode: "OpenCode",
+  openclaw: "OpenClaw",
+  sdk: "SDK",
+};
+
+const sourceLabel = (source: string) => SOURCE_LABELS[source] ?? source;
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
@@ -344,6 +350,9 @@ export default function TracesTable({
         <thead className="bg-neutral-900">
           <tr className="border-b border-neutral-800">
             <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
+              Source
+            </th>
+            <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
               Trace ID
             </th>
             <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
@@ -357,10 +366,13 @@ export default function TracesTable({
               </SortableHeader>
             </th>
             <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
-              Provider
+              Summary
             </th>
             <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
               Model
+            </th>
+            <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
+              Spans
             </th>
             <th className="text-left py-2.5 px-4 text-xs font-medium text-neutral-500">
               <SortableHeader
@@ -427,6 +439,11 @@ export default function TracesTable({
                 `}
               >
                 <td className="py-2.5 px-4">
+                  <span className="text-xs px-1.5 py-0.5 bg-neutral-800 text-neutral-400 rounded">
+                    {sourceLabel(trace.source)}
+                  </span>
+                </td>
+                <td className="py-2.5 px-4">
                   <span className="text-sm font-mono text-accent/80 truncate max-w-[100px] inline-block">
                     {trace.traceId.length > 12
                       ? `${trace.traceId.slice(0, 12)}`
@@ -438,16 +455,24 @@ export default function TracesTable({
                   <div className="text-xs text-neutral-500">{relative}</div>
                 </td>
                 <td className="py-2.5 px-4">
-                  <span className="text-xs px-1.5 py-0.5 bg-neutral-800 text-neutral-400 rounded capitalize">
-                    {trace.provider}
+                  <span
+                    className="text-sm text-neutral-300 truncate max-w-[280px] inline-block"
+                    title={trace.summary}
+                  >
+                    {trace.summary}
                   </span>
                 </td>
                 <td className="py-2.5 px-4">
                   <span
                     className="text-sm truncate max-w-[120px] inline-block"
-                    title={trace.modelRequested}
+                    title={trace.modelRequested ?? undefined}
                   >
-                    {trace.modelRequested}
+                    {trace.modelRequested == null ? "--" : trace.modelRequested}
+                  </span>
+                </td>
+                <td className="py-2.5 px-4">
+                  <span className="text-sm text-neutral-400">
+                    {trace.spanCount}
                   </span>
                 </td>
                 <td className="py-2.5 px-4">

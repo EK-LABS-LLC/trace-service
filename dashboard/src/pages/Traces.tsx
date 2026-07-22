@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { type ReactNode, useEffect, useRef, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Trace, GetTracesParams } from "../lib/apiClient";
 import { useTracesQuery } from "../api";
@@ -23,6 +23,174 @@ const RefreshIcon = () => (
     />
   </svg>
 );
+
+const FilterIcon = () => (
+  <svg
+    className="w-4 h-4 text-neutral-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+    />
+  </svg>
+);
+
+const ChevronDownIcon = () => (
+  <svg
+    className="w-3.5 h-3.5 text-neutral-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 9l-7 7-7-7"
+    />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg
+    className="h-3.5 w-3.5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M5 13l4 4L19 7"
+    />
+  </svg>
+);
+
+type SourceFilter = "" | "claude_code" | "codex" | "sdk";
+
+const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
+  "": "All sources",
+  claude_code: "Claude Code",
+  codex: "Codex",
+  sdk: "SDK",
+};
+
+function validSourceFilter(value: string | null): SourceFilter {
+  return value === "claude_code" || value === "codex" || value === "sdk"
+    ? value
+    : "";
+}
+
+interface ToolbarMenuProps<T extends string> {
+  ariaLabel: string;
+  icon: ReactNode;
+  prefix?: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}
+
+function ToolbarMenu<T extends string>({
+  ariaLabel,
+  icon,
+  prefix,
+  value,
+  options,
+  onChange,
+}: ToolbarMenuProps<T>) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const selected =
+    options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={menuRef} className="relative">
+      <button
+        type="button"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="group inline-flex h-8 items-center gap-2 rounded border border-neutral-800 bg-neutral-900/80 px-3 text-sm text-neutral-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:border-neutral-700 hover:bg-neutral-850 focus:outline-none focus:ring-1 focus:ring-accent/50"
+      >
+        {icon}
+        {prefix ? <span className="text-neutral-500">{prefix}</span> : null}
+        <span className="whitespace-nowrap text-neutral-300">
+          {selected?.label}
+        </span>
+        <span
+          className={`text-neutral-500 transition-transform group-hover:text-neutral-400 ${
+            open ? "rotate-180" : ""
+          }`}
+        >
+          <ChevronDownIcon />
+        </span>
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          aria-label={ariaLabel}
+          className="absolute right-0 top-full z-50 mt-1.5 min-w-full overflow-hidden rounded border border-neutral-800 bg-neutral-950/95 p-1 shadow-xl shadow-black/30 backdrop-blur"
+        >
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-4 rounded-sm px-2.5 py-1.5 text-left text-sm transition-colors ${
+                  active
+                    ? "bg-neutral-850 text-white"
+                    : "text-neutral-400 hover:bg-neutral-900 hover:text-neutral-200"
+                }`}
+              >
+                <span className="whitespace-nowrap">{option.label}</span>
+                <span className={active ? "text-accent" : "text-transparent"}>
+                  <CheckIcon />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export interface TracesFilters {
   provider: string;
@@ -76,6 +244,10 @@ export default function Traces() {
     session_id: searchParams.get("session_id") || "",
   }));
 
+  const [source, setSource] = useState<SourceFilter>(() =>
+    validSourceFilter(searchParams.get("source")),
+  );
+
   const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
 
   const queryParams = useMemo<GetTracesParams>(() => {
@@ -92,9 +264,10 @@ export default function Traces() {
     if (filters.date_to)
       params.date_to = toIsoDateRangeParam(filters.date_to, "end");
     if (filters.session_id) params.session_id = filters.session_id;
+    if (source) params.source = source;
 
     return params;
-  }, [filters, page, pageSize]);
+  }, [filters, page, pageSize, source]);
 
   const tracesQuery = useTracesQuery(
     "traces",
@@ -112,11 +285,13 @@ export default function Traces() {
     newFilters: TracesFilters,
     newPage: number,
     newPageSize: number,
+    newSource: SourceFilter,
   ) => {
     const params = new URLSearchParams();
     Object.entries(newFilters).forEach(([key, value]) => {
       if (value) params.set(key, value);
     });
+    if (newSource) params.set("source", newSource);
     if (newPage > 1) params.set("page", String(newPage));
     if (newPageSize !== DEFAULT_PAGE_SIZE)
       params.set("pageSize", String(newPageSize));
@@ -126,7 +301,7 @@ export default function Traces() {
   const applyFilters = (newFilters: TracesFilters) => {
     setFilters(newFilters);
     setPage(1);
-    updateUrlParams(newFilters, 1, pageSize);
+    updateUrlParams(newFilters, 1, pageSize, source);
     setSelectedTrace(null);
   };
 
@@ -136,14 +311,21 @@ export default function Traces() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
-    updateUrlParams(filters, newPage, pageSize);
+    updateUrlParams(filters, newPage, pageSize, source);
     setSelectedTrace(null);
   };
 
   const handlePageSizeChange = (newPageSize: number) => {
     setPageSize(newPageSize);
     setPage(1);
-    updateUrlParams(filters, 1, newPageSize);
+    updateUrlParams(filters, 1, newPageSize, source);
+    setSelectedTrace(null);
+  };
+
+  const handleSourceChange = (newSource: SourceFilter) => {
+    setSource(newSource);
+    setPage(1);
+    updateUrlParams(filters, 1, pageSize, newSource);
     setSelectedTrace(null);
   };
 
@@ -183,6 +365,19 @@ export default function Traces() {
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <ToolbarMenu
+            ariaLabel="Source"
+            icon={<FilterIcon />}
+            prefix="Source:"
+            value={source}
+            options={(Object.keys(SOURCE_FILTER_LABELS) as SourceFilter[]).map(
+              (value) => ({
+                value,
+                label: SOURCE_FILTER_LABELS[value],
+              }),
+            )}
+            onChange={handleSourceChange}
+          />
           <button
             onClick={() => tracesQuery.refetch()}
             disabled={loading || tracesQuery.isFetching}
@@ -234,7 +429,7 @@ export default function Traces() {
 
             {loading ? (
               <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-                <TableSkeleton rows={pageSize} columns={9} />
+                <TableSkeleton rows={pageSize} columns={12} />
               </div>
             ) : traces.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">

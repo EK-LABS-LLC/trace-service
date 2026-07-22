@@ -104,38 +104,6 @@ const SQLITE_BOOTSTRAP_STATEMENTS: readonly string[] = [
     "created_at" integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
     FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade
   );`,
-  `CREATE TABLE IF NOT EXISTS "sessions" (
-    "id" text PRIMARY KEY NOT NULL,
-    "project_id" text NOT NULL,
-    "created_at" integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-    "metadata" text,
-    FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade
-  );`,
-  `CREATE TABLE IF NOT EXISTS "traces" (
-    "trace_id" text PRIMARY KEY NOT NULL,
-    "project_id" text NOT NULL,
-    "session_id" text,
-    "timestamp" integer DEFAULT (cast((julianday('now') - 2440587.5)*86400000 as integer)) NOT NULL,
-    "latency_ms" integer NOT NULL,
-    "provider" text NOT NULL,
-    "model_requested" text NOT NULL,
-    "model_used" text,
-    "provider_request_id" text,
-    "request_body" text NOT NULL,
-    "response_body" text,
-    "input_tokens" integer,
-    "output_tokens" integer,
-    "output_text" text,
-    "finish_reason" text,
-    "status" text NOT NULL,
-    "error" text,
-    "cost_cents" real,
-    "metadata" text,
-    FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade,
-    FOREIGN KEY ("session_id") REFERENCES "sessions"("id") ON UPDATE no action ON DELETE set null
-  );`,
-  `CREATE INDEX IF NOT EXISTS "traces_project_timestamp_idx" ON "traces" ("project_id", "timestamp");`,
-  `CREATE INDEX IF NOT EXISTS "traces_project_session_idx" ON "traces" ("project_id", "session_id");`,
   `CREATE TABLE IF NOT EXISTS "spans" ${SQLITE_SPANS_TABLE_BODY};`,
   `ALTER TABLE "spans" ADD COLUMN "trace_id" text;`,
   `ALTER TABLE "spans" ADD COLUMN "provider" text;`,
@@ -223,38 +191,6 @@ const POSTGRES_BOOTSTRAP_STATEMENTS: readonly string[] = [
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade
   );`,
-  `CREATE TABLE IF NOT EXISTS "sessions" (
-    "id" text PRIMARY KEY NOT NULL,
-    "project_id" text NOT NULL,
-    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-    "metadata" jsonb,
-    FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade
-  );`,
-  `CREATE TABLE IF NOT EXISTS "traces" (
-    "trace_id" text PRIMARY KEY NOT NULL,
-    "project_id" text NOT NULL,
-    "session_id" text,
-    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
-    "latency_ms" integer NOT NULL,
-    "provider" text NOT NULL,
-    "model_requested" text NOT NULL,
-    "model_used" text,
-    "provider_request_id" text,
-    "request_body" jsonb NOT NULL,
-    "response_body" jsonb,
-    "input_tokens" integer,
-    "output_tokens" integer,
-    "output_text" text,
-    "finish_reason" text,
-    "status" text NOT NULL,
-    "error" jsonb,
-    "cost_cents" double precision,
-    "metadata" jsonb,
-    FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON UPDATE no action ON DELETE cascade,
-    FOREIGN KEY ("session_id") REFERENCES "sessions"("id") ON UPDATE no action ON DELETE set null
-  );`,
-  `CREATE INDEX IF NOT EXISTS "traces_project_timestamp_idx" ON "traces" ("project_id", "timestamp");`,
-  `CREATE INDEX IF NOT EXISTS "traces_project_session_idx" ON "traces" ("project_id", "session_id");`,
   `CREATE TABLE IF NOT EXISTS "spans" (
     "span_id" text NOT NULL,
     "trace_id" text,
@@ -338,7 +274,10 @@ export function bootstrapSqliteSchema(sqlite: BunSqliteDatabase): void {
     try {
       sqlite.exec(statement);
     } catch (error) {
-      if (!statement.startsWith("ALTER TABLE") || !String(error).includes("duplicate column")) {
+      if (
+        !statement.startsWith("ALTER TABLE") ||
+        !String(error).includes("duplicate column")
+      ) {
         throw error;
       }
     }
@@ -351,14 +290,19 @@ export function bootstrapSqliteSchema(sqlite: BunSqliteDatabase): void {
  * composite (project_id, span_id) key are rebuilt via copy-and-rename.
  */
 function migrateSqliteSpansPrimaryKey(sqlite: BunSqliteDatabase): void {
-  const columns = sqlite
-    .query(`PRAGMA table_info("spans")`)
-    .all() as Array<{ name: string; pk: number }>;
+  const columns = sqlite.query(`PRAGMA table_info("spans")`).all() as Array<{
+    name: string;
+    pk: number;
+  }>;
   const pkColumns = columns
     .filter((column) => column.pk > 0)
     .sort((a, b) => a.pk - b.pk)
     .map((column) => column.name);
-  if (pkColumns.length === 2 && pkColumns[0] === "project_id" && pkColumns[1] === "span_id") {
+  if (
+    pkColumns.length === 2 &&
+    pkColumns[0] === "project_id" &&
+    pkColumns[1] === "span_id"
+  ) {
     return;
   }
 
@@ -370,7 +314,9 @@ function migrateSqliteSpansPrimaryKey(sqlite: BunSqliteDatabase): void {
     sqlite.exec("BEGIN;");
     try {
       sqlite.exec(`CREATE TABLE "spans_rebuild" ${SQLITE_SPANS_TABLE_BODY};`);
-      sqlite.exec(`INSERT INTO "spans_rebuild" (${columnList}) SELECT ${columnList} FROM "spans";`);
+      sqlite.exec(
+        `INSERT INTO "spans_rebuild" (${columnList}) SELECT ${columnList} FROM "spans";`,
+      );
       sqlite.exec(`DROP TABLE "spans";`);
       sqlite.exec(`ALTER TABLE "spans_rebuild" RENAME TO "spans";`);
       for (const statement of SQLITE_SPANS_INDEX_STATEMENTS) {

@@ -1,10 +1,11 @@
-import type { Trace, NewTrace, Session, NewSession, Span, NewSpan } from "./schema";
+import type { Span, NewSpan } from "./schema";
 
 /**
  * Query filters for trace lookups.
  */
 export interface TraceQueryFilters {
   sessionId?: string;
+  source?: string;
   provider?: string;
   model?: string;
   status?: "success" | "error";
@@ -12,14 +13,6 @@ export interface TraceQueryFilters {
   dateTo?: Date;
   limit?: number;
   offset?: number;
-}
-
-/**
- * Result of a paginated trace query.
- */
-export interface TraceQueryResult {
-  traces: Trace[];
-  total: number;
 }
 
 /**
@@ -45,7 +38,8 @@ export interface SpanQueryFilters {
   offset?: number;
 }
 
-export type AgentSessionSort = "recent" | "oldest" | "duration" | "errors" | "volume";
+export type AgentSessionSort =
+  "recent" | "oldest" | "duration" | "errors" | "volume";
 
 export interface AgentSessionQueryFilters {
   dateFrom?: Date;
@@ -83,7 +77,7 @@ export interface SpanQueryResult {
   total: number;
 }
 
-export interface SdkTraceIdQueryResult {
+export interface TraceIdQueryResult {
   traceIds: string[];
   total: number;
 }
@@ -102,45 +96,6 @@ export interface SdkTraceIdQueryResult {
  * ```
  */
 export interface StorageAdapter {
-  /**
-   * Insert a new trace into storage.
-   */
-  insertTrace(projectId: string, trace: NewTrace): Promise<Trace>;
-
-  /**
-   * Insert a trace idempotently (skip if already exists).
-   * Used by WAL processing for crash recovery.
-   */
-  insertTraceIdempotent(projectId: string, trace: NewTrace): Promise<Trace>;
-
-  /**
-   * Get a single trace by ID, scoped to a project.
-   * Returns null if not found.
-   */
-  getTrace(traceId: string, projectId: string): Promise<Trace | null>;
-
-  /**
-   * Query traces for a project with optional filters and pagination.
-   */
-  queryTraces(projectId: string, filters?: TraceQueryFilters): Promise<TraceQueryResult>;
-
-  /**
-   * Count traces for a project with optional filters.
-   */
-  countTraces(projectId: string, filters?: TraceQueryFilters): Promise<number>;
-
-  /**
-   * Insert or update a session.
-   * If a session with the given ID exists, update its metadata.
-   * Otherwise, create a new session.
-   */
-  upsertSession(projectId: string, session: NewSession): Promise<Session>;
-
-  /**
-   * Get all traces for a session, ordered by timestamp ascending.
-   */
-  getSessionTraces(sessionId: string, projectId: string): Promise<Trace[]>;
-
   /**
    * Get all spans for a session, ordered by timestamp ascending.
    */
@@ -175,7 +130,10 @@ export interface StorageAdapter {
   /**
    * Query spans for a project with optional filters and pagination.
    */
-  querySpans(projectId: string, filters?: SpanQueryFilters): Promise<SpanQueryResult>;
+  querySpans(
+    projectId: string,
+    filters?: SpanQueryFilters,
+  ): Promise<SpanQueryResult>;
 
   /**
    * Query agent sessions grouped from spans for a project.
@@ -190,6 +148,9 @@ export interface StorageAdapter {
    */
   countSpans(projectId: string, filters?: SpanQueryFilters): Promise<number>;
 
-  /** Query distinct SDK trace ids in trace-summary order. */
-  querySdkTraceIds(projectId: string, filters?: TraceQueryFilters): Promise<SdkTraceIdQueryResult>;
+  /** Query distinct trace ids across all sources, in trace-summary order. */
+  queryTraceIds(
+    projectId: string,
+    filters?: TraceQueryFilters,
+  ): Promise<TraceIdQueryResult>;
 }

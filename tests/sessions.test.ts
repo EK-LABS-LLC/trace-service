@@ -113,7 +113,9 @@ describe("Sessions Endpoint", () => {
 
       expect(response.status).toBe(200);
       expect(data.sessionId).toBe(sessionId);
-      expect(data.spans.length).toBe(12);
+      // 12 plain test spans + 10 llm_call spans backing the derived traces
+      // created via createTestTraces (traces are spans now, not a separate table).
+      expect(data.spans.length).toBe(22);
     });
 
     test("spans are ordered by timestamp", async () => {
