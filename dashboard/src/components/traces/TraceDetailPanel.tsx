@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Trace } from "../../lib/apiClient";
+import TraceSpanTree from "./TraceSpanTree";
 
 interface TraceDetailPanelProps {
   trace: Trace | null;
@@ -179,6 +180,8 @@ export default function TraceDetailPanel({
   if (!trace) return null;
 
   const isError = trace.status === "error";
+  // Agent traces carry no provider, and with it no model, token, or cost data.
+  const isLlmTrace = trace.provider != null;
   const totalTokens = (trace.inputTokens || 0) + (trace.outputTokens || 0);
   const inputPercent =
     totalTokens > 0 ? ((trace.inputTokens || 0) / totalTokens) * 100 : 0;
@@ -267,53 +270,71 @@ export default function TraceDetailPanel({
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 space-y-4">
           {/* Quick Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          <div
+            className={`grid gap-3 ${isLlmTrace ? "grid-cols-3" : "grid-cols-1"}`}
+          >
             <div className="bg-neutral-900 border border-neutral-800 rounded p-3 text-center">
               <div className="text-xs text-neutral-500 mb-1">Latency</div>
               <div className="text-sm font-medium">
                 {formatLatency(trace.latencyMs)}
               </div>
             </div>
-            <div className="bg-neutral-900 border border-neutral-800 rounded p-3 text-center">
-              <div className="text-xs text-neutral-500 mb-1">Tokens</div>
-              <div className="text-sm font-medium">
-                {totalTokens.toLocaleString()}
+            {isLlmTrace && (
+              <div className="bg-neutral-900 border border-neutral-800 rounded p-3 text-center">
+                <div className="text-xs text-neutral-500 mb-1">Tokens</div>
+                <div className="text-sm font-medium">
+                  {totalTokens.toLocaleString()}
+                </div>
               </div>
-            </div>
-            <div className="bg-neutral-900 border border-neutral-800 rounded p-3 text-center">
-              <div className="text-xs text-neutral-500 mb-1">Cost</div>
-              <div className="text-sm font-medium">
-                {formatCost(trace.costCents)}
+            )}
+            {isLlmTrace && (
+              <div className="bg-neutral-900 border border-neutral-800 rounded p-3 text-center">
+                <div className="text-xs text-neutral-500 mb-1">Cost</div>
+                <div className="text-sm font-medium">
+                  {formatCost(trace.costCents)}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
+          {/* Spans */}
+          {trace.spans && trace.spans.length > 0 && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded p-3">
+              <div className="text-xs text-neutral-500 uppercase tracking-wide mb-2">
+                Timeline
+              </div>
+              <TraceSpanTree spans={trace.spans} indentPx={12} />
+            </div>
+          )}
+
           {/* Model Info */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded p-3">
-            <div className="text-xs text-neutral-500 uppercase tracking-wide mb-2">
-              Model
-            </div>
-            <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Provider</span>
-                <span className="capitalize">{trace.provider}</span>
+          {isLlmTrace && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded p-3">
+              <div className="text-xs text-neutral-500 uppercase tracking-wide mb-2">
+                Model
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Requested</span>
-                <span>{trace.modelRequested}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Used</span>
-                <span className="text-xs font-mono">{trace.modelUsed}</span>
-              </div>
-              {trace.finishReason && (
+              <div className="space-y-1.5 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-neutral-500">Finish Reason</span>
-                  <span>{trace.finishReason}</span>
+                  <span className="text-neutral-500">Provider</span>
+                  <span className="capitalize">{trace.provider}</span>
                 </div>
-              )}
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Requested</span>
+                  <span>{trace.modelRequested}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-neutral-500">Used</span>
+                  <span className="text-xs font-mono">{trace.modelUsed}</span>
+                </div>
+                {trace.finishReason && (
+                  <div className="flex justify-between">
+                    <span className="text-neutral-500">Finish Reason</span>
+                    <span>{trace.finishReason}</span>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Tokens */}
           {totalTokens > 0 && (

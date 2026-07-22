@@ -106,6 +106,7 @@ export interface Span {
   model?: string;
   agentName?: string;
   metadata?: Record<string, unknown>;
+  label?: string;
 }
 
 export interface SpansResponse {

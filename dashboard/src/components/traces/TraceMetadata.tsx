@@ -19,22 +19,29 @@ interface TraceMetadataProps {
 
 export default function TraceMetadata({ trace }: TraceMetadataProps) {
   const totalTokens = (trace.inputTokens || 0) + (trace.outputTokens || 0);
+  // Agent traces carry no provider, and with it no token, cost, or finish data.
+  const isLlmTrace = trace.provider != null;
   const items = [
     { label: "Latency", value: formatLatency(trace.latencyMs) },
-    {
-      label: "Input Tokens",
-      value: trace.inputTokens?.toLocaleString() ?? "--",
-    },
-    {
-      label: "Output Tokens",
-      value: trace.outputTokens?.toLocaleString() ?? "--",
-    },
-    {
-      label: "Total Tokens",
-      value: totalTokens > 0 ? totalTokens.toLocaleString() : "--",
-    },
-    { label: "Cost", value: formatCost(trace.costCents) },
-    { label: "Finish Reason", value: trace.finishReason ?? "--" },
+    { label: "Spans", value: String(trace.spanCount) },
+    ...(isLlmTrace
+      ? [
+          {
+            label: "Input Tokens",
+            value: trace.inputTokens?.toLocaleString() ?? "--",
+          },
+          {
+            label: "Output Tokens",
+            value: trace.outputTokens?.toLocaleString() ?? "--",
+          },
+          {
+            label: "Total Tokens",
+            value: totalTokens > 0 ? totalTokens.toLocaleString() : "--",
+          },
+          { label: "Cost", value: formatCost(trace.costCents) },
+          { label: "Finish Reason", value: trace.finishReason ?? "--" },
+        ]
+      : []),
     {
       label: "Session ID",
       value: trace.sessionId ?? "--",
