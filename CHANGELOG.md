@@ -12,6 +12,7 @@ Added: Trace summaries adapt to their source, keeping model, token, and cost fie
 Added: `queryTraceIds` on the SQLite and Postgres adapters excludes session lifecycle events by event type so `stop` spans are retained.
 Removed: Legacy trace ingest endpoints, the trace-ingest event bus listener, and the `traces` and `sessions` tables.
 Changed: Dashboard traces table shows source as a badge and filter instead of splitting LLM and agent traffic into separate views.
+Changed: Dashboard views render placeholders for cost and token fields and omit provider and model badges on agent traces, which carry none of those values.
 
 ### Accept Canonical Agent OTLP Attributes
 

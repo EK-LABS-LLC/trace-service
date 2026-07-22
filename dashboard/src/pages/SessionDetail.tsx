@@ -87,7 +87,8 @@ function formatTokens(count: number): string {
   return String(count);
 }
 
-function formatCost(cents: number): string {
+function formatCost(cents: number | null): string {
+  if (cents === null) return "--";
   return `$${(cents / 100).toFixed(2)}`;
 }
 

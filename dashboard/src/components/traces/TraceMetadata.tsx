@@ -8,7 +8,8 @@ function formatLatency(ms: number): string {
   return `${ms}ms`;
 }
 
-function formatCost(cents: number): string {
+function formatCost(cents: number | null): string {
+  if (cents === null) return "--";
   return `$${(cents / 100).toFixed(4)}`;
 }
 
