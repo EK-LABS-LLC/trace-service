@@ -42,6 +42,7 @@ export type AgentSessionSort =
   "recent" | "oldest" | "duration" | "errors" | "volume";
 
 export interface AgentSessionQueryFilters {
+  source?: SpanQueryFilters["source"];
   dateFrom?: Date;
   dateTo?: Date;
   limit?: number;
@@ -57,7 +58,12 @@ export interface AgentSessionSummaryRow {
   agentRuns: number;
   toolCalls: number;
   errorCount: number;
+  traceCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
   sessionDurationMs: number | null;
+  sources: string[] | string | null;
   source: string | null;
   cwd: string | null;
   model: string | null;

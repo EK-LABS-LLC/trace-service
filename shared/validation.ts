@@ -223,6 +223,7 @@ export const agentSessionSortSchema = z.enum([
 ]);
 
 export const agentSessionQuerySchema = z.object({
+  source: spanSourceSchema.optional(),
   date_from: z.union([z.string(), z.coerce.number()]).optional(),
   date_to: z.union([z.string(), z.coerce.number()]).optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(100),

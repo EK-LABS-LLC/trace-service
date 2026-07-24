@@ -174,7 +174,7 @@ export function deriveTraceSummary(
   };
 }
 
-async function queryAllSdkSpans(
+async function queryAllSpans(
   projectId: string,
   storage: StorageAdapter,
   filters: {
@@ -247,21 +247,25 @@ export async function listSessionTraceSummaries(
   projectId: string,
   storage: StorageAdapter,
 ): Promise<TraceSummary[]> {
-  const spans = await queryAllSdkSpans(projectId, storage, { sessionId });
-  return [...groupSpansByTraceId(spans).entries()]
+  const spans = await queryAllSpans(projectId, storage, { sessionId });
+  const traceSpans = spans.filter(
+    (span) =>
+      span.eventType !== "session_start" && span.eventType !== "session_end",
+  );
+  return [...groupSpansByTraceId(traceSpans).entries()]
     .map(([traceId, traceSpans]) => deriveTraceSummary(traceId, traceSpans))
     .sort((a, b) => timestampMs(a.timestamp) - timestampMs(b.timestamp));
 }
 
 /**
- * Look up a single SDK-derived trace by id, or null if no matching spans exist.
+ * Look up a single span-derived trace by id, or null if no matching spans exist.
  */
 export async function getTraceSummary(
   traceId: string,
   projectId: string,
   storage: StorageAdapter,
 ): Promise<TraceSummary | null> {
-  const spans = await queryAllSdkSpans(projectId, storage, { traceId });
+  const spans = await queryAllSpans(projectId, storage, { traceId });
   if (spans.length === 0) return null;
   return deriveTraceSummary(traceId, spans);
 }

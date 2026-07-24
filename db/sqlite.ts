@@ -8,7 +8,10 @@ import {
   asc,
   sql,
   notInArray,
+  exists,
+  isNotNull,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 import { spans } from "./schema-single";
 import type { Span, NewSpan } from "./schema-single";
 import type {
@@ -147,6 +150,7 @@ export class SqliteStorage implements StorageAdapter {
     filters: AgentSessionQueryFilters = {},
   ): Promise<AgentSessionQueryResult> {
     const conditions = [eq(spans.projectId, projectId)];
+    const sourceSpans = alias(spans, "source_spans");
 
     if (filters.dateFrom) {
       conditions.push(gte(spans.timestamp, filters.dateFrom));
@@ -154,22 +158,52 @@ export class SqliteStorage implements StorageAdapter {
     if (filters.dateTo) {
       conditions.push(lte(spans.timestamp, filters.dateTo));
     }
+    if (filters.source) {
+      const sourceConditions = [
+        eq(sourceSpans.projectId, projectId),
+        eq(sourceSpans.sessionId, spans.sessionId),
+        eq(sourceSpans.source, filters.source),
+        isNotNull(sourceSpans.traceId),
+        notInArray(sourceSpans.eventType, ["session_start", "session_end"]),
+      ];
+      if (filters.dateFrom) {
+        sourceConditions.push(gte(sourceSpans.timestamp, filters.dateFrom));
+      }
+      if (filters.dateTo) {
+        sourceConditions.push(lte(sourceSpans.timestamp, filters.dateTo));
+      }
+      conditions.push(
+        exists(
+          this.db
+            .select({ value: sql`1` })
+            .from(sourceSpans)
+            .where(and(...sourceConditions)),
+        ),
+      );
+    }
 
     const whereClause = and(...conditions);
-    const countResult = await this.db
-      .select({ total: sql<number>`COUNT(DISTINCT ${spans.sessionId})` })
-      .from(spans)
-      .where(whereClause);
-    const total = Number(countResult[0]?.total ?? 0);
-
     const limit = filters.limit ?? 100;
     const offset = filters.offset ?? 0;
     const sort = filters.sort ?? "recent";
     const firstTimestamp = sql<Date | number>`MIN(${spans.timestamp})`;
     const lastTimestamp = sql<Date | number>`MAX(${spans.timestamp})`;
-    const durationMs = sql<number>`COALESCE(MAX(CASE WHEN ${spans.kind} = 'session' THEN ${spans.durationMs} END), MAX(${spans.timestamp}) - MIN(${spans.timestamp}), 0)`;
+    const durationMs = sql<number>`COALESCE(MAX(CASE WHEN ${spans.eventType} = 'session_end' THEN ${spans.durationMs} END), MAX(${spans.timestamp}) - MIN(${spans.timestamp}), 0)`;
     const errorCount = sql<number>`SUM(CASE WHEN ${spans.status} = 'error' THEN 1 ELSE 0 END)`;
     const totalSpans = count();
+    const traceCount = sql<number>`COUNT(DISTINCT CASE WHEN ${spans.eventType} NOT IN ('session_start', 'session_end') THEN ${spans.traceId} END)`;
+    const hasTraces = sql`${traceCount} > 0`;
+    const sessionGroups = this.db
+      .select({ sessionId: spans.sessionId })
+      .from(spans)
+      .where(whereClause)
+      .groupBy(spans.sessionId)
+      .having(hasTraces)
+      .as("session_groups");
+    const countResult = await this.db
+      .select({ total: count() })
+      .from(sessionGroups);
+    const total = Number(countResult[0]?.total ?? 0);
 
     const orderBy = (() => {
       switch (sort) {
@@ -196,9 +230,14 @@ export class SqliteStorage implements StorageAdapter {
         agentRuns: sql<number>`SUM(CASE WHEN ${spans.kind} = 'agent_run' THEN 1 ELSE 0 END)`,
         toolCalls: sql<number>`COUNT(DISTINCT CASE WHEN ${spans.kind} = 'tool_use' THEN COALESCE(${spans.toolUseId}, ${spans.spanId}) END)`,
         errorCount,
-        sessionDurationMs: sql<
-          number | null
-        >`MAX(CASE WHEN ${spans.kind} = 'session' THEN ${spans.durationMs} END)`,
+        traceCount,
+        inputTokens: sql<number>`COALESCE(SUM(${spans.inputTokens}), 0)`,
+        outputTokens: sql<number>`COALESCE(SUM(${spans.outputTokens}), 0)`,
+        costCents: sql<number>`COALESCE(SUM(${spans.costCents}), 0)`,
+        sessionDurationMs: durationMs,
+        sources: sql<
+          string | null
+        >`GROUP_CONCAT(DISTINCT CASE WHEN ${spans.traceId} IS NOT NULL AND ${spans.eventType} NOT IN ('session_start', 'session_end') THEN ${spans.source} END)`,
         source: sql<string | null>`MAX(${spans.source})`,
         cwd: sql<string | null>`MAX(${spans.cwd})`,
         model: sql<string | null>`MAX(${spans.model})`,
@@ -207,6 +246,7 @@ export class SqliteStorage implements StorageAdapter {
       .from(spans)
       .where(whereClause)
       .groupBy(spans.sessionId)
+      .having(hasTraces)
       .orderBy(...orderBy)
       .limit(limit)
       .offset(offset);
@@ -259,6 +299,7 @@ export class SqliteStorage implements StorageAdapter {
     const conditions = [
       eq(spans.projectId, projectId),
       notInArray(spans.eventType, ["session_start", "session_end"]),
+      isNotNull(spans.traceId),
     ];
     if (filters.source) conditions.push(eq(spans.source, filters.source));
     if (filters.sessionId)

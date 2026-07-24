@@ -55,13 +55,18 @@ describe("Traces Endpoints", () => {
 
   describe("GET /v1/traces", () => {
     test("filters by provider", async () => {
+      const providerProject = await createTestProject(
+        "Provider Filter Traces Test Project",
+      );
+      await createTestTraces(providerProject.id, 3);
       const response = await authFetch(
         "/v1/traces?provider=openai",
-        testProject.apiKey,
+        providerProject.apiKey,
       );
       const data = (await response.json()) as TracesResponse;
 
       expect(response.status).toBe(200);
+      expect(data.traces.length).toBeGreaterThan(0);
       data.traces.forEach((trace) => {
         expect(trace.provider).toBe("openai");
       });
@@ -201,6 +206,15 @@ describe("Traces Endpoints", () => {
           model: "gpt-4o-mini",
           status: "success",
         },
+        {
+          span_id: "missing-trace-id",
+          session_id: "s",
+          timestamp: new Date().toISOString(),
+          source: "claude_code",
+          kind: "tool_use",
+          event_type: "post_tool_use",
+          status: "success",
+        },
       ]);
 
       const response = await authFetch(
@@ -213,6 +227,57 @@ describe("Traces Endpoints", () => {
       const ids = data.traces.map((t) => t.traceId);
       expect(ids).toContain("tc");
       expect(ids).not.toContain("tk");
+      expect(data.total).toBe(1);
+    });
+
+    test("paginates derived traces without overlap", async () => {
+      const paginationProject = await createTestProject(
+        "Paginated Traces Test Project",
+      );
+      await createTestTraces(paginationProject.id, 5);
+
+      const [firstResponse, secondResponse] = await Promise.all([
+        authFetch("/v1/traces?limit=2&offset=0", paginationProject.apiKey),
+        authFetch("/v1/traces?limit=2&offset=2", paginationProject.apiKey),
+      ]);
+      const first = (await firstResponse.json()) as TracesResponse;
+      const second = (await secondResponse.json()) as TracesResponse;
+
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(200);
+      expect(first.total).toBe(5);
+      expect(second.total).toBe(5);
+      expect(first.traces).toHaveLength(2);
+      expect(second.traces).toHaveLength(2);
+      const firstIds = new Set(first.traces.map((trace) => trace.traceId));
+      expect(second.traces.every((trace) => !firstIds.has(trace.traceId))).toBe(
+        true,
+      );
+    });
+
+    test("filters derived traces by status", async () => {
+      const statusProject = await createTestProject(
+        "Status Filter Traces Test Project",
+      );
+      await createTestTraces(statusProject.id, 12);
+
+      const [errorResponse, successResponse] = await Promise.all([
+        authFetch("/v1/traces?status=error", statusProject.apiKey),
+        authFetch("/v1/traces?status=success", statusProject.apiKey),
+      ]);
+      const errors = (await errorResponse.json()) as TracesResponse;
+      const successes = (await successResponse.json()) as TracesResponse;
+
+      expect(errorResponse.status).toBe(200);
+      expect(successResponse.status).toBe(200);
+      expect(errors.total).toBe(1);
+      expect(successes.total).toBe(11);
+      expect(errors.traces.every((trace) => trace.status === "error")).toBe(
+        true,
+      );
+      expect(
+        successes.traces.every((trace) => trace.status === "success"),
+      ).toBe(true);
     });
   });
 });

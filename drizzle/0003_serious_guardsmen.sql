@@ -1,2 +1,2 @@
-DROP TABLE `sessions`;--> statement-breakpoint
-DROP TABLE `traces`;
+DROP TABLE `traces`;--> statement-breakpoint
+DROP TABLE `sessions`;

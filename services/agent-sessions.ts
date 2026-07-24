@@ -14,6 +14,11 @@ export interface AgentSessionSummary {
   toolCalls: number;
   totalSpans: number;
   errorCount: number;
+  traceCount: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
+  sources: string[];
   source?: string;
   cwd?: string;
   model?: string;
@@ -43,11 +48,22 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function sourceList(value: string[] | string | null): string[] {
+  const sources = Array.isArray(value) ? value : (value?.split(",") ?? []);
+  return [
+    ...new Set(sources.map((source) => source.trim()).filter(Boolean)),
+  ].sort();
+}
+
 function mapRow(row: AgentSessionSummaryRow): AgentSessionSummary {
   const firstTimestamp = toDate(row.firstTimestamp);
   const lastTimestamp = toDate(row.lastTimestamp);
   const sessionDurationMs = row.sessionDurationMs;
-  const inferredDurationMs = Math.max(0, lastTimestamp.getTime() - firstTimestamp.getTime());
+  const inferredDurationMs = Math.max(
+    0,
+    lastTimestamp.getTime() - firstTimestamp.getTime(),
+  );
+  const sources = sourceList(row.sources);
 
   return {
     sessionId: row.sessionId,
@@ -62,7 +78,12 @@ function mapRow(row: AgentSessionSummaryRow): AgentSessionSummary {
     toolCalls: toNumber(row.toolCalls),
     totalSpans: toNumber(row.totalSpans),
     errorCount: toNumber(row.errorCount),
-    source: optionalString(row.source),
+    traceCount: toNumber(row.traceCount),
+    inputTokens: toNumber(row.inputTokens),
+    outputTokens: toNumber(row.outputTokens),
+    costCents: toNumber(row.costCents),
+    sources,
+    source: sources.length === 1 ? sources[0] : undefined,
     cwd: optionalString(row.cwd),
     model: optionalString(row.model),
     agentName: optionalString(row.agentName),
@@ -72,7 +93,7 @@ function mapRow(row: AgentSessionSummaryRow): AgentSessionSummary {
 export async function queryAgentSessions(
   projectId: string,
   filters: AgentSessionQueryFilters,
-  storage: StorageAdapter
+  storage: StorageAdapter,
 ): Promise<QueryAgentSessionsResult> {
   const result = await storage.queryAgentSessions(projectId, filters);
 
