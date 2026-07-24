@@ -357,7 +357,7 @@ export default function Sessions() {
     sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
 
   useEffect(() => {
-    if (loading || page <= totalPages) return;
+    if (loading || error || page <= totalPages) return;
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
@@ -369,7 +369,7 @@ export default function Sessions() {
     return () => {
       cancelled = true;
     };
-  }, [loading, page, searchParams, setSearchParams, totalPages]);
+  }, [error, loading, page, searchParams, setSearchParams, totalPages]);
 
   const filteredSessions = sessions.filter((s) => {
     if (!searchQuery) return true;
@@ -504,10 +504,14 @@ export default function Sessions() {
                   </svg>
                 </div>
                 <h3 className="text-sm font-medium text-neutral-300 mb-2">
-                  No Sessions
+                  {searchQuery && total > 0
+                    ? "No matching sessions"
+                    : "No Sessions"}
                 </h3>
                 <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                  Sessions with span data will appear here when available.
+                  {searchQuery && total > 0
+                    ? "No sessions on this page match your search."
+                    : "Sessions with span data will appear here when available."}
                 </p>
               </div>
             </div>

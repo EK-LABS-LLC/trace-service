@@ -25,6 +25,11 @@ function formatTimeAgo(timestamp: string): string {
 }
 
 function formatDuration(ms: number): string {
+  if (ms >= 3600000) {
+    const hours = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    return `${hours}h ${mins}m`;
+  }
   if (ms >= 60000) {
     const mins = Math.floor(ms / 60000);
     const secs = Math.floor((ms % 60000) / 1000);

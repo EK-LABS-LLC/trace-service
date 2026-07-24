@@ -15,6 +15,7 @@ Changed: Dashboard traces table shows source as a badge and filter instead of sp
 Changed: Dashboard views render placeholders for cost and token fields and omit provider and model badges on agent traces, which carry none of those values.
 Changed: Dashboard Sessions uses one paginated, URL-backed list with source filtering, mixed-source badges, aggregate trace/span/token/cost metrics, and trace-detail drill-down.
 Fixed: Session summaries exclude lifecycle-only and trace-less sessions, preserve mixed-source aggregates while filtering, ignore null trace IDs, and compute duration from the session boundary instead of a stop turn.
+Fixed: Dashboard Sessions formats hour-long durations consistently, preserves pagination after query errors, and distinguishes empty search results from an empty dataset.
 Removed: Stale trace-WAL configuration and legacy direct-JSON trace endpoint documentation.
 Added: Migration coverage proves populated legacy trace/session tables are removed in foreign-key-safe order without deleting spans.
 
