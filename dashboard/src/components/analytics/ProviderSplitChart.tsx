@@ -26,6 +26,7 @@ function CustomTooltip({
   if (!active || !payload || !payload.length) return null;
 
   const entry = payload[0];
+  if (!entry) return null;
   const data = entry.payload;
   const total = payload.reduce((sum, entry) => sum + entry.value, 0);
   const percentage =

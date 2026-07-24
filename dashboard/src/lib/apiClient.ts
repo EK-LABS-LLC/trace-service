@@ -67,7 +67,7 @@ export interface TracesResponse {
   total: number;
 }
 
-export interface Session {
+export interface SessionTraceSummaries {
   sessionId: string;
   traces: Trace[];
   spans?: Span[];
@@ -120,6 +120,7 @@ export type AgentSessionSort =
 export interface GetAgentSessionsParams {
   date_from?: string;
   date_to?: string;
+  source?: SpanSource;
   limit?: number;
   offset?: number;
   sort?: AgentSessionSort;
@@ -133,8 +134,13 @@ export interface ApiAgentSessionSummary {
   durationMs: number;
   agentRuns: number;
   toolCalls: number;
+  traceCount: number;
   totalSpans: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
   errorCount: number;
+  sources: SpanSource[];
   source?: SpanSource;
   cwd?: string;
   model?: string;
@@ -223,12 +229,6 @@ export interface SpansAnalyticsResponse {
   spansByKind: Array<{ kind: string; count: number }>;
   spansBySource: Array<{ source: string; count: number }>;
   spansOverTime: Array<{ period: string; count: number }>;
-}
-
-// Session Spans Response
-export interface SessionSpansResponse {
-  sessionId: string;
-  spans: Span[];
 }
 
 export interface GetSpansAnalyticsParams {
@@ -321,7 +321,9 @@ export const getTrace = async (id: string): Promise<Trace> => {
   return handleResponse<Trace>(response);
 };
 
-export const getSession = async (id: string): Promise<Session> => {
+export const getSessionTraceSummaries = async (
+  id: string,
+): Promise<SessionTraceSummaries> => {
   const response = await fetch(
     `${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(id)}`,
     {
@@ -329,7 +331,7 @@ export const getSession = async (id: string): Promise<Session> => {
       headers: getProjectHeaders(),
     },
   );
-  return handleResponse<Session>(response);
+  return handleResponse<SessionTraceSummaries>(response);
 };
 
 export const getSpans = async (
@@ -398,19 +400,6 @@ export const getSpansAnalytics = async (
     headers: getProjectHeaders(),
   });
   return handleResponse<SpansAnalyticsResponse>(response);
-};
-
-export const getSessionSpans = async (
-  sessionId: string,
-): Promise<SessionSpansResponse> => {
-  const response = await fetch(
-    `${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(sessionId)}/spans`,
-    {
-      credentials: "include",
-      headers: getProjectHeaders(),
-    },
-  );
-  return handleResponse<SessionSpansResponse>(response);
 };
 
 export const createProject = async (

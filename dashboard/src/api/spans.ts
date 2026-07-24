@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   getAgentSessions,
   getSpansAnalytics,
-  getSessionSpans,
   getSpans,
   type GetAgentSessionsParams,
   type GetSpansAnalyticsParams,
@@ -12,31 +11,25 @@ import {
 export function useSpansAnalyticsQuery(
   scope: string,
   projectId: string | undefined,
-  params: GetSpansAnalyticsParams
+  params: GetSpansAnalyticsParams,
 ) {
   return useQuery({
-    queryKey: [scope, projectId, params.date_from, params.date_to, params.group_by],
+    queryKey: [
+      scope,
+      projectId,
+      params.date_from,
+      params.date_to,
+      params.group_by,
+    ],
     enabled: !!projectId,
     queryFn: () => getSpansAnalytics(params),
-  });
-}
-
-export function useSessionSpansQuery(
-  scope: string,
-  projectId: string | undefined,
-  sessionId: string | undefined
-) {
-  return useQuery({
-    queryKey: [scope, projectId, sessionId],
-    enabled: !!projectId && !!sessionId,
-    queryFn: () => getSessionSpans(sessionId!),
   });
 }
 
 export function useSpansQuery(
   scope: string,
   projectId: string | undefined,
-  params: GetSpansParams = {}
+  params: GetSpansParams = {},
 ) {
   return useQuery({
     queryKey: [scope, projectId, params],
@@ -48,7 +41,7 @@ export function useSpansQuery(
 export function useAgentSessionsQuery(
   scope: string,
   projectId: string | undefined,
-  params: GetAgentSessionsParams = {}
+  params: GetAgentSessionsParams = {},
 ) {
   return useQuery({
     queryKey: [scope, projectId, params],

@@ -42,7 +42,7 @@ function getProviderColorIndex(provider: string): number {
  * Returns a hex color code.
  */
 export function getProviderColor(provider: string): string {
-  return PROVIDER_COLORS[getProviderColorIndex(provider)];
+  return PROVIDER_COLORS[getProviderColorIndex(provider)] ?? "#34d399";
 }
 
 /**
@@ -53,7 +53,12 @@ export function getProviderBadgeClasses(provider: string): {
   bg: string;
   text: string;
 } {
-  return PROVIDER_BADGE_CLASSES[getProviderColorIndex(provider)];
+  return (
+    PROVIDER_BADGE_CLASSES[getProviderColorIndex(provider)] ?? {
+      bg: "bg-emerald-500/5",
+      text: "text-emerald-400/70",
+    }
+  );
 }
 
 /**

@@ -19,7 +19,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught an error:", error, errorInfo);
   }
 
@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: null });
   };
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
         <div className="flex h-screen items-center justify-center bg-neutral-950 text-neutral-100">

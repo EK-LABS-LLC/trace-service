@@ -48,15 +48,24 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      refreshProjects();
-      return;
-    }
+    let cancelled = false;
+    const refresh = () => {
+      if (cancelled) return;
+      if (isAuthenticated) {
+        void refreshProjects();
+        return;
+      }
 
-    localStorage.removeItem(SELECTED_PROJECT_KEY);
-    setProjects([]);
-    setSelectedProjectState(null);
-    setIsProjectLoading(false);
+      localStorage.removeItem(SELECTED_PROJECT_KEY);
+      setProjects([]);
+      setSelectedProjectState(null);
+      setIsProjectLoading(false);
+    };
+
+    queueMicrotask(refresh);
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, refreshProjects]);
 
   const setSelectedProject = (project: Project) => {

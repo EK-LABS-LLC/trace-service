@@ -1,20 +1,24 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
-import type { Trace } from "../lib/apiClient";
 import SessionsTable from "../components/sessions/SessionsTable";
-import AgentSessionsTable from "../components/sessions/AgentSessionsTable";
-import type { SessionSummary } from "../components/sessions/SessionsTable";
 import { TableSkeleton } from "../components/ui/TableSkeleton";
-import { useAgentSessionsQuery, useTracesQuery } from "../api";
+import { useAgentSessionsQuery } from "../api";
 import { useProject } from "../hooks/useProject";
 import { summarizeApiAgentSession } from "../lib/agentSessions";
 
-type ViewTab = "llm" | "agents";
 type DateRange = "all" | "24h" | "7d" | "30d";
 type SessionSort = "recent" | "oldest" | "duration" | "errors" | "volume";
+type PageSize = 25 | 50 | 100;
+type SourceFilter =
+  "" | "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
 
 const CalendarIcon = () => (
-  <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg
+    className="w-4 h-4 text-neutral-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -25,12 +29,33 @@ const CalendarIcon = () => (
 );
 
 const SearchIcon = () => (
-  <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg
+    className="w-4 h-4 text-neutral-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth={1.5}
       d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+    />
+  </svg>
+);
+
+const FilterIcon = () => (
+  <svg
+    className="w-4 h-4 text-neutral-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={1.5}
+      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L15 12.414V19a1 1 0 01-.553.894l-4 2A1 1 0 019 21v-8.586L3.293 6.707A1 1 0 013 6V4z"
     />
   </svg>
 );
@@ -42,12 +67,22 @@ const ChevronDownIcon = () => (
     stroke="currentColor"
     viewBox="0 0 24 24"
   >
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M19 9l-7 7-7-7"
+    />
   </svg>
 );
 
 const SortIcon = () => (
-  <svg className="w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg
+    className="w-4 h-4 text-neutral-500"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
     <path
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -58,8 +93,18 @@ const SortIcon = () => (
 );
 
 const CheckIcon = () => (
-  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+  <svg
+    className="h-3.5 w-3.5"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M5 13l4 4L19 7"
+    />
   </svg>
 );
 
@@ -76,6 +121,15 @@ const SORT_LABELS: Record<SessionSort, string> = {
   duration: "Duration",
   errors: "Errors",
   volume: "Volume",
+};
+
+const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
+  "": "All sources",
+  claude_code: "Claude Code",
+  codex: "Codex",
+  opencode: "OpenCode",
+  openclaw: "OpenClaw",
+  sdk: "SDK",
 };
 
 interface ToolbarMenuProps<T extends string> {
@@ -97,7 +151,8 @@ function ToolbarMenu<T extends string>({
 }: ToolbarMenuProps<T>) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const selected = options.find((option) => option.value === value) ?? options[0];
+  const selected =
+    options.find((option) => option.value === value) ?? options[0];
 
   useEffect(() => {
     if (!open) return;
@@ -133,7 +188,9 @@ function ToolbarMenu<T extends string>({
       >
         {icon}
         {prefix ? <span className="text-neutral-500">{prefix}</span> : null}
-        <span className="whitespace-nowrap text-neutral-300">{selected?.label}</span>
+        <span className="whitespace-nowrap text-neutral-300">
+          {selected?.label}
+        </span>
         <span
           className={`text-neutral-500 transition-transform group-hover:text-neutral-400 ${
             open ? "rotate-180" : ""
@@ -180,21 +237,43 @@ function ToolbarMenu<T extends string>({
   );
 }
 
-function validTab(value: string | null): ViewTab {
-  return value === "agents" ? "agents" : "llm";
-}
-
 function validRange(value: string | null): DateRange {
   return value === "24h" || value === "7d" || value === "30d" ? value : "all";
 }
 
 function validSort(value: string | null): SessionSort {
-  return value === "oldest" || value === "duration" || value === "errors" || value === "volume"
+  return value === "oldest" ||
+    value === "duration" ||
+    value === "errors" ||
+    value === "volume"
     ? value
     : "recent";
 }
 
-function getDateRangeParams(range: DateRange): { date_from?: string; date_to?: string } {
+function validSourceFilter(value: string | null): SourceFilter {
+  return value === "claude_code" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "openclaw" ||
+    value === "sdk"
+    ? value
+    : "";
+}
+
+function validPage(value: string | null): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function validPageSize(value: string | null): PageSize {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return parsed === 25 || parsed === 100 ? parsed : 50;
+}
+
+function getDateRangeParams(range: DateRange): {
+  date_from?: string;
+  date_to?: string;
+} {
   if (range === "all") return {};
 
   const from = new Date();
@@ -209,152 +288,103 @@ function getDateRangeParams(range: DateRange): { date_from?: string; date_to?: s
   return { date_from: from.toISOString() };
 }
 
-function groupTracesIntoSessions(traces: Trace[]): SessionSummary[] {
-  const sessionMap = new Map<string, Trace[]>();
-
-  for (const trace of traces) {
-    if (!trace.sessionId) continue;
-    const existing = sessionMap.get(trace.sessionId) || [];
-    existing.push(trace);
-    sessionMap.set(trace.sessionId, existing);
-  }
-
-  const sessions: SessionSummary[] = [];
-  for (const [session_id, sessionTraces] of sessionMap) {
-    const sorted = sessionTraces.sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
-    const totalTokens = sorted.reduce(
-      (sum, t) => sum + (t.inputTokens || 0) + (t.outputTokens || 0),
-      0
-    );
-    const totalCost = sorted.reduce((sum, t) => sum + (t.costCents || 0), 0);
-    const errorCount = sorted.filter((t) => t.status === "error").length;
-
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    if (!first || !last) continue;
-
-    sessions.push({
-      session_id,
-      first_trace_time: first.timestamp,
-      last_trace_time: last.timestamp,
-      trace_count: sorted.length,
-      total_tokens: totalTokens,
-      total_cost_cents: totalCost,
-      error_count: errorCount,
-      user: first.metadata?.user as string | undefined,
-    });
-  }
-
-  return sessions.sort(
-    (a, b) => new Date(b.first_trace_time).getTime() - new Date(a.first_trace_time).getTime()
-  );
-}
-
 export default function Sessions() {
   const { selectedProject } = useProject();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
-  const activeTab = validTab(searchParams.get("tab"));
   const dateRange = validRange(searchParams.get("range"));
   const sort = validSort(searchParams.get("sort"));
+  const source = validSourceFilter(searchParams.get("source"));
+  const page = validPage(searchParams.get("page"));
+  const pageSize = validPageSize(searchParams.get("pageSize"));
   const dateParams = useMemo(() => getDateRangeParams(dateRange), [dateRange]);
 
-  const updateSearchParam = (key: string, value: string | null) => {
+  useEffect(() => {
+    if (!searchParams.has("tab")) return;
     const next = new URLSearchParams(searchParams);
-    if (value) next.set(key, value);
-    else next.delete(key);
+    next.delete("tab");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const updateSearchParams = (updates: Record<string, string | null>) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
     setSearchParams(next, { replace: true });
   };
 
-  const selectTab = (tab: ViewTab) => {
-    updateSearchParam("tab", tab === "agents" ? "agents" : null);
-  };
-
   const selectDateRange = (range: DateRange) => {
-    updateSearchParam("range", range === "all" ? null : range);
+    updateSearchParams({
+      range: range === "all" ? null : range,
+      page: null,
+    });
   };
 
   const selectSort = (nextSort: SessionSort) => {
-    updateSearchParam("sort", nextSort === "recent" ? null : nextSort);
+    updateSearchParams({
+      sort: nextSort === "recent" ? null : nextSort,
+      page: null,
+    });
   };
 
-  // LLM sessions (from traces)
-  const sessionsQuery = useTracesQuery("sessions-source-traces", selectedProject?.id, {
-    limit: 500,
-    ...dateParams,
-  });
+  const selectSource = (nextSource: SourceFilter) => {
+    updateSearchParams({ source: nextSource || null, page: null });
+  };
 
-  const agentSessionsQuery = useAgentSessionsQuery(
-    "sessions-source-agent-sessions",
+  const sessionsQuery = useAgentSessionsQuery(
+    "sessions-list",
     selectedProject?.id,
     {
-      limit: 500,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
       sort,
+      source: source || undefined,
       ...dateParams,
-    }
+    },
   );
 
-  const llmSessions = groupTracesIntoSessions(sessionsQuery.data?.traces ?? []);
-  const agentSessions = agentSessionsQuery.data?.sessions.map(summarizeApiAgentSession) ?? [];
+  const sessions =
+    sessionsQuery.data?.sessions.map(summarizeApiAgentSession) ?? [];
+  const total = sessionsQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = Math.min(page * pageSize, total);
+  const loading = sessionsQuery.isPending;
+  const error =
+    sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
 
-  const llmLoading = sessionsQuery.isPending;
-  const agentLoading = agentSessionsQuery.isPending;
-  const llmError = sessionsQuery.error instanceof Error ? sessionsQuery.error.message : null;
-  const agentError =
-    agentSessionsQuery.error instanceof Error ? agentSessionsQuery.error.message : null;
+  useEffect(() => {
+    if (loading || page <= totalPages) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const next = new URLSearchParams(searchParams);
+      if (totalPages === 1) next.delete("page");
+      else next.set("page", String(totalPages));
+      setSearchParams(next, { replace: true });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, page, searchParams, setSearchParams, totalPages]);
 
-  const searchedLlmSessions = searchQuery
-    ? llmSessions.filter(
-        (s) =>
-          s.session_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (s.user && s.user.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-    : llmSessions;
-
-  const filteredLlmSessions = [...searchedLlmSessions].sort((a, b) => {
-    switch (sort) {
-      case "oldest":
-        return new Date(a.first_trace_time).getTime() - new Date(b.first_trace_time).getTime();
-      case "duration":
-        return (
-          new Date(b.last_trace_time).getTime() -
-          new Date(b.first_trace_time).getTime() -
-          (new Date(a.last_trace_time).getTime() - new Date(a.first_trace_time).getTime())
-        );
-      case "errors":
-        return b.error_count - a.error_count;
-      case "volume":
-        return b.trace_count - a.trace_count;
-      case "recent":
-      default:
-        return new Date(b.last_trace_time).getTime() - new Date(a.last_trace_time).getTime();
-    }
+  const filteredSessions = sessions.filter((s) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return [
+      s.displayName,
+      s.subtitle,
+      s.sessionId,
+      s.shortId,
+      s.sourceLabel,
+      s.cwd,
+      s.model,
+    ].some((value) => value?.toLowerCase().includes(query));
   });
 
-  const filteredAgentSessions = searchQuery
-    ? agentSessions.filter((s) => {
-        const query = searchQuery.toLowerCase();
-        return [
-          s.displayName,
-          s.subtitle,
-          s.sessionId,
-          s.shortId,
-          s.sourceLabel,
-          s.cwd,
-          s.model,
-          s.firstPrompt,
-        ].some((value) => value?.toLowerCase().includes(query));
-      })
-    : agentSessions;
-
-  const total =
-    activeTab === "llm"
-      ? llmSessions.length
-      : (agentSessionsQuery.data?.total ?? agentSessions.length);
-  const error = activeTab === "llm" ? llmError : agentError;
   const returnTo = `${location.pathname}${location.search}`;
 
   return (
@@ -362,40 +392,35 @@ export default function Sessions() {
       <header className="h-14 flex items-center justify-between px-6 border-b border-neutral-800 flex-shrink-0 bg-neutral-950">
         <div className="flex items-center gap-4">
           <h1 className="text-sm font-medium">Sessions</h1>
-          {/* Tab Switcher */}
-          <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-sm p-0.5">
-            <button
-              onClick={() => selectTab("llm")}
-              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                activeTab === "llm"
-                  ? "bg-neutral-800 text-white"
-                  : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              LLM
-            </button>
-            <button
-              onClick={() => selectTab("agents")}
-              className={`px-3 py-1 text-xs font-medium rounded-sm transition-colors ${
-                activeTab === "agents"
-                  ? "bg-neutral-800 text-white"
-                  : "text-neutral-500 hover:text-neutral-300"
-              }`}
-            >
-              Agents
-            </button>
-          </div>
-          <span className="text-xs text-neutral-500">{total.toLocaleString()} total</span>
+          <span className="text-xs text-neutral-500">
+            {(searchQuery ? filteredSessions.length : total).toLocaleString()}{" "}
+            total
+          </span>
         </div>
         <div className="flex items-center gap-3">
+          <ToolbarMenu
+            ariaLabel="Source"
+            icon={<FilterIcon />}
+            prefix="Source:"
+            value={source}
+            options={(Object.keys(SOURCE_FILTER_LABELS) as SourceFilter[]).map(
+              (value) => ({
+                value,
+                label: SOURCE_FILTER_LABELS[value],
+              }),
+            )}
+            onChange={selectSource}
+          />
           <ToolbarMenu
             ariaLabel="Date range"
             icon={<CalendarIcon />}
             value={dateRange}
-            options={(Object.keys(DATE_RANGE_LABELS) as DateRange[]).map((range) => ({
-              value: range,
-              label: DATE_RANGE_LABELS[range],
-            }))}
+            options={(Object.keys(DATE_RANGE_LABELS) as DateRange[]).map(
+              (range) => ({
+                value: range,
+                label: DATE_RANGE_LABELS[range],
+              }),
+            )}
             onChange={selectDateRange}
           />
           <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-neutral-500">
@@ -415,11 +440,7 @@ export default function Sessions() {
               <SearchIcon />
               <input
                 type="text"
-                placeholder={
-                  activeTab === "agents"
-                    ? "Search by name, folder, model, or session ID..."
-                    : "Search by session ID or user..."
-                }
+                placeholder="Filter this page by name, folder, model, or session ID..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="flex-1 bg-transparent text-sm text-neutral-300 placeholder:text-neutral-500 outline-none"
@@ -431,10 +452,12 @@ export default function Sessions() {
             icon={<SortIcon />}
             prefix="Sort:"
             value={sort}
-            options={(Object.keys(SORT_LABELS) as SessionSort[]).map((sortOption) => ({
-              value: sortOption,
-              label: SORT_LABELS[sortOption],
-            }))}
+            options={(Object.keys(SORT_LABELS) as SessionSort[]).map(
+              (sortOption) => ({
+                value: sortOption,
+                label: SORT_LABELS[sortOption],
+              }),
+            )}
             onChange={selectSort}
           />
         </div>
@@ -446,10 +469,7 @@ export default function Sessions() {
             <div className="flex items-center justify-between gap-4">
               <p className="text-rose-400 text-sm">{error}</p>
               <button
-                onClick={() => {
-                  if (activeTab === "llm") sessionsQuery.refetch();
-                  else agentSessionsQuery.refetch();
-                }}
+                onClick={() => sessionsQuery.refetch()}
                 className="text-sm text-accent hover:underline whitespace-nowrap"
               >
                 Retry
@@ -458,61 +478,98 @@ export default function Sessions() {
           </div>
         )}
 
-        {!error && activeTab === "llm" && (
-          <>
-            {llmLoading ? (
-              <div className="max-w-5xl mx-auto">
-                <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
-                  <TableSkeleton rows={10} columns={7} />
+        {!error &&
+          (loading ? (
+            <div className="max-w-7xl mx-auto">
+              <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
+                <TableSkeleton rows={10} columns={9} />
+              </div>
+            </div>
+          ) : filteredSessions.length === 0 ? (
+            <div className="max-w-7xl mx-auto">
+              <div className="bg-neutral-900 border border-neutral-800 rounded p-8 text-center">
+                <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-neutral-800 flex items-center justify-center">
+                  <svg
+                    className="w-6 h-6 text-neutral-500"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                </div>
+                <h3 className="text-sm font-medium text-neutral-300 mb-2">
+                  No Sessions
+                </h3>
+                <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+                  Sessions with span data will appear here when available.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-7xl mx-auto">
+              <SessionsTable sessions={filteredSessions} returnTo={returnTo} />
+              <div className="mt-3 flex items-center justify-between text-xs text-neutral-500">
+                <div className="flex items-center gap-2">
+                  <span>
+                    {startItem.toLocaleString()}–{endItem.toLocaleString()} of{" "}
+                    {total.toLocaleString()}
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(event) =>
+                      updateSearchParams({
+                        pageSize:
+                          event.target.value === "50"
+                            ? null
+                            : event.target.value,
+                        page: null,
+                      })
+                    }
+                    className="rounded border border-neutral-800 bg-neutral-900 px-2 py-1 text-neutral-400 outline-none"
+                    aria-label="Sessions per page"
+                  >
+                    <option value={25}>25 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() =>
+                      updateSearchParams({
+                        page: page - 1 === 1 ? null : String(page - 1),
+                      })
+                    }
+                    className="rounded border border-neutral-800 px-2.5 py-1.5 text-neutral-400 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {page.toLocaleString()} of{" "}
+                    {totalPages.toLocaleString()}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() =>
+                      updateSearchParams({ page: String(page + 1) })
+                    }
+                    className="rounded border border-neutral-800 px-2.5 py-1.5 text-neutral-400 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="max-w-5xl mx-auto">
-                <SessionsTable sessions={filteredLlmSessions} />
-              </div>
-            )}
-          </>
-        )}
-
-        {!error && activeTab === "agents" && (
-          <>
-            {agentLoading ? (
-              <div className="max-w-5xl mx-auto">
-                <div className="bg-neutral-900 border border-neutral-800 rounded overflow-hidden">
-                  <TableSkeleton rows={10} columns={6} />
-                </div>
-              </div>
-            ) : filteredAgentSessions.length === 0 ? (
-              <div className="max-w-5xl mx-auto">
-                <div className="bg-neutral-900 border border-neutral-800 rounded p-8 text-center">
-                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-neutral-800 flex items-center justify-center">
-                    <svg
-                      className="w-6 h-6 text-neutral-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M13 10V3L4 14h7v7l9-11h-7z"
-                      />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-medium text-neutral-300 mb-2">No Agent Sessions</h3>
-                  <p className="text-xs text-neutral-500 max-w-sm mx-auto">
-                    Agent sessions with span data will appear here when available.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="max-w-5xl mx-auto">
-                <AgentSessionsTable sessions={filteredAgentSessions} returnTo={returnTo} />
-              </div>
-            )}
-          </>
-        )}
+            </div>
+          ))}
       </div>
     </div>
   );

@@ -72,17 +72,24 @@ const CheckIcon = () => (
   </svg>
 );
 
-type SourceFilter = "" | "claude_code" | "codex" | "sdk";
+type SourceFilter =
+  "" | "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
 
 const SOURCE_FILTER_LABELS: Record<SourceFilter, string> = {
   "": "All sources",
   claude_code: "Claude Code",
   codex: "Codex",
+  opencode: "OpenCode",
+  openclaw: "OpenClaw",
   sdk: "SDK",
 };
 
 function validSourceFilter(value: string | null): SourceFilter {
-  return value === "claude_code" || value === "codex" || value === "sdk"
+  return value === "claude_code" ||
+    value === "codex" ||
+    value === "opencode" ||
+    value === "openclaw" ||
+    value === "sdk"
     ? value
     : "";
 }

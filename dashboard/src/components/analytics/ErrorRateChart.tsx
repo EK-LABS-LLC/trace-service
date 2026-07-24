@@ -44,7 +44,8 @@ function CustomTooltip({
 }) {
   if (!active || !payload || !payload.length) return null;
 
-  const data = payload[0].payload;
+  const data = payload[0]?.payload;
+  if (!data) return null;
 
   return (
     <div className="bg-neutral-850 border border-neutral-700 rounded px-3 py-2 shadow-xl">
