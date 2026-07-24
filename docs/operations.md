@@ -55,7 +55,6 @@ Binary output: `dist/pulse-server`.
 export PULSE_MODE=scale
 export PULSE_RUNTIME_MODE=all
 export DATABASE_URL='postgresql://pulse:pulse@localhost:5432/pulse'
-export TRACE_WAL_PARTITIONS=4
 export SPAN_WAL_PARTITIONS=4
 export PORT=3000
 # 32+ chars for signing dashboard sessions/cookies

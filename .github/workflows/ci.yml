@@ -87,14 +87,12 @@ jobs:
         env:
           PULSE_MODE: scale
           DATABASE_URL: postgresql://pulse:pulse@localhost:5432/pulse
-          WAL_DIR: .data/wal.test
           WAL_SPAN_DIR: .data/wal-spans.test
-          TRACE_WAL_PARTITIONS: "1"
           SPAN_WAL_PARTITIONS: "1"
         run: |
           set -e
           bun run db:migrate:scale
-          rm -rf .data/wal.test .data/wal-spans.test
+          rm -rf .data/wal-spans.test
           bun run pulse.ts > /tmp/trace-service-scale-test.log 2>&1 &
           PID=$!
           trap 'kill $PID 2>/dev/null || true; wait $PID 2>/dev/null || true' EXIT

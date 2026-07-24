@@ -12,7 +12,8 @@ Backend + integrated dashboard for LLM observability.
 ### Data plane (SDK/API key)
 Use these from servers, workers, apps, and scripts:
 
-- `POST /v1/traces/batch`
+- `POST /v1/traces` (OTLP/HTTP JSON)
+- `POST /v1/spans/batch` (validated Pulse spans)
 - `GET /v1/traces`
 - `GET /v1/traces/:id`
 - `GET /v1/sessions/:id`
@@ -66,7 +67,6 @@ Optional:
 - `ADMIN_KEY` (legacy/internal use)
 - `FRONTEND_URL` (optional override for a separate dashboard origin during frontend development)
 - `DASHBOARD_DIST_DIR` (optional path to built dashboard assets if not using the default discovery paths)
-- `TRACE_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
 - `SPAN_WAL_PARTITIONS` (default `1` in `single`, `4` in `scale`)
 
 Example (local):
@@ -338,9 +338,12 @@ const anthropic = observe(
 
 ## Raw API (optional)
 
-If you are not using the SDK, send traces directly to:
+If you are not using the SDK, send telemetry directly to:
 
-- `POST /v1/traces/batch` with `Authorization: Bearer pulse_sk_...`
+- `POST /v1/traces` for OTLP/HTTP JSON exports
+- `POST /v1/spans/batch` for validated Pulse span batches
+
+Both endpoints require `Authorization: Bearer pulse_sk_...`.
 
 ## Security model
 
