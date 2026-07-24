@@ -4,7 +4,7 @@
 
 ### Unify Traces And Sessions On Spans
 
-Date: 2026-07-21 21:30 CDT; Status: In Progress; PR: #18 https://github.com/EK-LABS-LLC/trace-service/pull/18
+Date: 2026-07-21 21:30 CDT; Status: Completed; PR: #18 https://github.com/EK-LABS-LLC/trace-service/pull/18
 Task: Derive traces and sessions from OTLP spans so agent and SDK traffic share one traces view.
 Changed: Bumped trace-service package version to 0.2.16.
 Changed: `GET /v1/traces` returns span-derived summaries for every source and accepts a `source` filter, replacing the SDK-only merge path.
@@ -13,6 +13,10 @@ Added: `queryTraceIds` on the SQLite and Postgres adapters excludes session life
 Removed: Legacy trace ingest endpoints, the trace-ingest event bus listener, and the `traces` and `sessions` tables.
 Changed: Dashboard traces table shows source as a badge and filter instead of splitting LLM and agent traffic into separate views.
 Changed: Dashboard views render placeholders for cost and token fields and omit provider and model badges on agent traces, which carry none of those values.
+Changed: Dashboard Sessions uses one paginated, URL-backed list with source filtering, mixed-source badges, aggregate trace/span/token/cost metrics, and trace-detail drill-down.
+Fixed: Session summaries exclude lifecycle-only and trace-less sessions, preserve mixed-source aggregates while filtering, ignore null trace IDs, and compute duration from the session boundary instead of a stop turn.
+Removed: Stale trace-WAL configuration and legacy direct-JSON trace endpoint documentation.
+Added: Migration coverage proves populated legacy trace/session tables are removed in foreign-key-safe order without deleting spans.
 
 ### Accept Canonical Agent OTLP Attributes
 

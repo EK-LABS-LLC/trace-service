@@ -2,7 +2,7 @@
 
 Date: 2026-07-20
 Branch: `feat/unified-otel-traces`
-Status: Approved (pending spec review)
+Status: Implemented
 
 ## Problem
 
@@ -24,7 +24,7 @@ One unified, source-agnostic OTel model surfaced consistently in the dashboard:
   many traces via `session_id`; a trace is one turn/request (`trace_id`); a span
   is one operation.
 - A single **Traces** view listing every trace regardless of `source`, with a
-  source badge (`sdk` / `claude` / `codex` / …) and a source filter.
+  source badge (`sdk` / `claude_code` / `codex` / …) and a source filter.
 - A single **Sessions** view (no LLM/Agents tab split) grouping all traces by
   `session_id`, with the same source filter.
 - The legacy trace/session system removed entirely — code and DB tables — so the
@@ -43,7 +43,7 @@ One unified, source-agnostic OTel model surfaced consistently in the dashboard:
 
 A trace = all spans sharing a `trace_id`.
 
-- **Agent trace** (source `claude`/`codex`/…): root span is `agent.turn`, opened
+- **Agent trace** (source `claude_code`/`codex`/…): root span is `agent.turn`, opened
   on `user_prompt_submit` and closed on `stop`. Children are `pre_tool_use`,
   `post_tool_use`, `post_tool_use_failure`, `assistant_message`,
   `permission_request`, `subagent_start`, `subagent_stop`. No `llm_call` span —
@@ -84,7 +84,8 @@ for agent traces):
 Computed server-side so the table just renders it.
 
 - Agent trace: `"{N} tool calls · {M} files edited"`.
-  - `toolCallCount` = number of `tool_use` spans (reliable for every source).
+  - `toolCallCount` = number of distinct `tool_use_id` values among
+    `tool_use` spans, falling back to `span_id` when no tool-use id exists.
   - `filesEdited` = count of distinct file paths pulled from `tool_input` of
     edit-type tools. Edit-tool names are maintained as a small per-agent list
     (Claude: `Edit`, `Write`, `MultiEdit`; Codex: `apply_patch`). When no edit
@@ -122,8 +123,8 @@ request/response panels. Agent traces show only the tree.
 
 Remove the LLM/Agents tab split in `pages/Sessions.tsx`. One session list
 grouping all traces by `session_id` regardless of source, with the same Source
-filter to narrow (e.g. `claude`). Each session row: source badge(s), trace count,
-span count, duration, and tokens/cost when any LLM traces are present.
+filter to narrow (e.g. `claude_code`). Each session row: source badge(s), trace
+count, span count, duration, and tokens/cost when any LLM traces are present.
 `pages/SessionDetail.tsx` → the session's traces, each drillable into that
 trace's span tree. Unify the two existing code paths
 (`SessionsTable` / `useSessionDetailQuery` legacy and
@@ -186,6 +187,23 @@ unaffected.
 - Dashboard: the unified Traces table renders agent and SDK rows together and the
   source filter narrows correctly; a session shows all its traces regardless of
   source.
+
+## Implementation result
+
+Implemented on `feat/unified-otel-traces`:
+
+- Traces and sessions are derived exclusively from spans in SQLite and
+  PostgreSQL, with legacy trace/session tables and ingest paths removed.
+- Lifecycle markers remain available as spans but cannot create traces,
+  inflate session trace counts, or add phantom source badges.
+- Sessions use one paginated, URL-backed list with source filtering, mixed-source
+  badges, aggregate metrics, and trace-to-span-tree drill-down.
+- SQLite and PostgreSQL pass the full 89-test integration suite in both combined
+  and split-process runtime modes. Dashboard type-check, production build, and
+  lint also pass.
+- A seeded live runtime verified authenticated Sessions listing, SDK filtering,
+  session detail, and trace detail. Interactive browser verification was not
+  available in the execution environment.
 
 ## Rollout
 
