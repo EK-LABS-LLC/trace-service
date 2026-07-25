@@ -32,24 +32,25 @@ function formatLatency(ms: number): string {
   return Math.round(ms) + "ms";
 }
 
-function formatCost(cents: number): string {
+function formatCost(cents: number | null): string {
+  if (cents === null) return "-";
   return "$" + (cents / 100).toFixed(4);
 }
 
 function formatTokens(
-  input?: number,
-  output?: number,
+  input?: number | null,
+  output?: number | null,
 ): { input: string; output: string } {
-  const formatNum = (n: number | undefined) => {
-    if (n === undefined) return "-";
+  const formatNum = (n: number | null | undefined) => {
+    if (n === null || n === undefined) return "-";
     if (n >= 1000) return (n / 1000).toFixed(1) + "K";
     return n.toLocaleString();
   };
   return { input: formatNum(input), output: formatNum(output) };
 }
 
-function getProviderBadgeColor(provider: string): string {
-  const { bg, text } = getProviderBadgeClasses(provider);
+function getProviderBadgeColor(provider: string | null): string {
+  const { bg, text } = getProviderBadgeClasses(provider ?? "");
   return `${bg} ${text}`;
 }
 
@@ -174,7 +175,7 @@ export function RecentTracesTable({ traces, loading }: RecentTracesTableProps) {
                       <span
                         className={`text-xs px-1.5 py-0.5 rounded font-medium ${getProviderBadgeColor(trace.provider)}`}
                       >
-                        {getProviderLabel(trace.provider)}
+                        {getProviderLabel(trace.provider ?? "")}
                       </span>
                     </td>
                     <td className="py-2.5 px-4">

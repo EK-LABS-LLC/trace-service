@@ -3,14 +3,10 @@ import { closeDb } from "./db";
 import { createApp } from "./app";
 import { getRuntimeServices } from "./runtime/services";
 import {
-  startWAL,
-  stopWAL,
   startSpanWAL,
   stopSpanWAL,
-  resolveTraceWALDirs,
   resolveSpanWALDirs,
 } from "./event-bus/client";
-import { TraceStreamListener } from "./event-bus/listener";
 import { SpanStreamListener } from "./event-bus/span-listener";
 import { WALCheckpoint } from "./event-bus/checkpoint";
 
@@ -21,7 +17,6 @@ type RuntimeModeFlags = {
 
 type RuntimeApiState = {
   server: ReturnType<typeof Bun.serve> | null;
-  traceWalStarted: boolean;
   spanWalStarted: boolean;
 };
 
@@ -44,11 +39,12 @@ function getWalListenerConfig(walDir: string) {
   };
 }
 
-async function startApiRuntime(flags: RuntimeModeFlags): Promise<RuntimeApiState> {
+async function startApiRuntime(
+  flags: RuntimeModeFlags,
+): Promise<RuntimeApiState> {
   if (!flags.runApi) {
     return {
       server: null,
-      traceWalStarted: false,
       spanWalStarted: false,
     };
   }
@@ -59,11 +55,6 @@ async function startApiRuntime(flags: RuntimeModeFlags): Promise<RuntimeApiState
     port: env.PORT,
   });
 
-  await startWAL({
-    walDir: env.WAL_DIR,
-    partitions: env.TRACE_WAL_PARTITIONS,
-  });
-
   await startSpanWAL({
     walDir: env.WAL_SPAN_DIR,
     partitions: env.SPAN_WAL_PARTITIONS,
@@ -71,7 +62,6 @@ async function startApiRuntime(flags: RuntimeModeFlags): Promise<RuntimeApiState
 
   return {
     server,
-    traceWalStarted: true,
     spanWalStarted: true,
   };
 }
@@ -100,12 +90,11 @@ async function startListeners<T extends { start: () => Promise<void> }>(
 
 function logRuntimeStarted(
   flags: RuntimeModeFlags,
-  tracePartitions: number,
   spanPartitions: number,
 ): void {
   const portInfo = flags.runApi ? `, port=${env.PORT}` : "";
   console.log(
-    `Pulse runtime started (mode=${env.PULSE_MODE}, runtime=${env.PULSE_RUNTIME_MODE}, api=${flags.runApi ? "on" : "off"}, listeners=${flags.runListeners ? "on" : "off"}, trace_partitions=${tracePartitions}, span_partitions=${spanPartitions}${portInfo})`,
+    `Pulse runtime started (mode=${env.PULSE_MODE}, runtime=${env.PULSE_RUNTIME_MODE}, api=${flags.runApi ? "on" : "off"}, listeners=${flags.runListeners ? "on" : "off"}, span_partitions=${spanPartitions}${portInfo})`,
   );
 }
 
@@ -123,19 +112,7 @@ export async function startPulseServer(): Promise<void> {
   await runtime.bootstrapDb();
 
   const flags = getRuntimeFlags();
-  const { server, traceWalStarted, spanWalStarted } = await startApiRuntime(
-    flags,
-  );
-  const traceListeners = await startListeners(
-    flags.runListeners,
-    resolveTraceWALDirs(),
-    (walDir, checkpoint) =>
-      new TraceStreamListener(
-        getWalListenerConfig(walDir),
-        checkpoint,
-        env.WAL_MAX_RETRIES,
-      ),
-  );
+  const { server, spanWalStarted } = await startApiRuntime(flags);
   const spanListeners = await startListeners(
     flags.runListeners,
     resolveSpanWALDirs(),
@@ -147,7 +124,7 @@ export async function startPulseServer(): Promise<void> {
       ),
   );
 
-  logRuntimeStarted(flags, traceListeners.length, spanListeners.length);
+  logRuntimeStarted(flags, spanListeners.length);
 
   const shutdown = async () => {
     console.log("Starting graceful shutdown...");
@@ -159,9 +136,7 @@ export async function startPulseServer(): Promise<void> {
 
     try {
       server?.stop();
-      traceListeners.forEach((listener) => listener.stop());
       spanListeners.forEach((listener) => listener.stop());
-      await stopWalIfStarted(traceWalStarted, stopWAL);
       await stopWalIfStarted(spanWalStarted, stopSpanWAL);
       await closeDb();
       clearTimeout(shutdownTimeout);

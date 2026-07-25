@@ -11,40 +11,23 @@ export const providerSchema = z.enum(["openai", "anthropic", "openrouter"]);
 export const statusSchema = z.enum(["success", "error"]);
 
 /**
- * Trace validation schema for incoming trace data
+ * Source identifies which CLI tool produced the span.
  */
-export const traceSchema = z.object({
-  trace_id: z.string().uuid(),
-  timestamp: z.string().datetime({ offset: true }),
-  provider: providerSchema,
-  model_requested: z.string().min(1),
-  model_used: z.string().optional(),
-  provider_request_id: z.string().optional(),
-  request_body: z.record(z.string(), z.unknown()),
-  response_body: z.record(z.string(), z.unknown()).optional(),
-  input_tokens: z.number().int().nonnegative().optional(),
-  output_tokens: z.number().int().nonnegative().optional(),
-  output_text: z.string().optional(),
-  finish_reason: z.string().optional(),
-  status: statusSchema,
-  error: z.record(z.string(), z.unknown()).optional(),
-  latency_ms: z.number().nonnegative(),
-  cost_cents: z.number().nonnegative().optional(),
-  session_id: z.string().uuid().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
-/**
- * Batch trace schema - array of traces with max 100 items
- */
-export const batchTraceSchema = z.array(traceSchema).max(100);
+export const spanSourceSchema = z.enum([
+  "claude_code",
+  "codex",
+  "opencode",
+  "openclaw",
+  "sdk",
+]);
 
 /**
  * Query params schema for GET /v1/traces
  */
 export const traceQuerySchema = z.object({
   session_id: z.string().uuid().optional(),
-  provider: providerSchema.optional(),
+  source: spanSourceSchema.optional(),
+  provider: z.string().optional(),
   model: z.string().optional(),
   status: statusSchema.optional(),
   date_from: z.union([z.string(), z.coerce.number()]).optional(),
@@ -74,11 +57,6 @@ export const spanAnalyticsQuerySchema = z.object({
   date_to: z.string().datetime({ offset: true }),
   group_by: spanAnalyticsGroupBySchema.optional(),
 });
-
-/**
- * Source identifies which CLI tool produced the span.
- */
-export const spanSourceSchema = z.enum(["claude_code", "codex", "opencode", "openclaw", "sdk"]);
 
 /**
  * Span kind categorizes what the span represents.
@@ -216,7 +194,9 @@ export const batchSpanSchema = z.array(spanSchema).max(100);
  * Span WAL payload schema - validates one complete OTLP export independently
  * from the public span HTTP batch limit.
  */
-export const walSpanBatchSchema = z.array(spanSchema).max(MAX_OTLP_SPANS_PER_EXPORT);
+export const walSpanBatchSchema = z
+  .array(spanSchema)
+  .max(MAX_OTLP_SPANS_PER_EXPORT);
 
 /**
  * Query params schema for GET /v1/spans
@@ -234,9 +214,16 @@ export const spanQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-export const agentSessionSortSchema = z.enum(["recent", "oldest", "duration", "errors", "volume"]);
+export const agentSessionSortSchema = z.enum([
+  "recent",
+  "oldest",
+  "duration",
+  "errors",
+  "volume",
+]);
 
 export const agentSessionQuerySchema = z.object({
+  source: spanSourceSchema.optional(),
   date_from: z.union([z.string(), z.coerce.number()]).optional(),
   date_to: z.union([z.string(), z.coerce.number()]).optional(),
   limit: z.coerce.number().int().min(1).max(1000).default(100),
@@ -249,8 +236,6 @@ export const agentSessionQuerySchema = z.object({
  */
 export type Provider = z.infer<typeof providerSchema>;
 export type TraceStatus = z.infer<typeof statusSchema>;
-export type TraceInput = z.infer<typeof traceSchema>;
-export type BatchTraceInput = z.infer<typeof batchTraceSchema>;
 export type TraceQueryParams = z.infer<typeof traceQuerySchema>;
 export type GroupBy = z.infer<typeof groupBySchema>;
 export type AnalyticsQueryParams = z.infer<typeof analyticsQuerySchema>;

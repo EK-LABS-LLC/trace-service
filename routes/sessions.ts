@@ -1,17 +1,11 @@
 import type { Context } from "hono";
 import { storage } from "../db";
-import { getSessionTraces, getSessionSpans } from "../services/sessions";
-import { listSdkSessionTraceSummaries } from "../services/sdk-traces";
-
-function timestampMs(value: Date | string | number): number {
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  return new Date(value).getTime();
-}
+import { getSessionSpans } from "../services/sessions";
+import { listSessionTraceSummaries } from "../services/derived-traces";
 
 /**
  * Handler for GET /v1/sessions/:id
- * Returns all traces for a session (legacy + SDK-derived), ordered by timestamp.
+ * Returns all span-derived traces for a session, ordered by timestamp ascending.
  */
 export async function handleGetSessionTraces(c: Context): Promise<Response> {
   const projectId = c.get("projectId") as string;
@@ -20,14 +14,7 @@ export async function handleGetSessionTraces(c: Context): Promise<Response> {
     return c.json({ error: "Session id is required" }, 400);
   }
 
-  const [result, sdkTraces] = await Promise.all([
-    getSessionTraces(sessionId, projectId, storage),
-    listSdkSessionTraceSummaries(sessionId, projectId, storage),
-  ]);
-
-  const traces = [...result.traces, ...sdkTraces].sort(
-    (a, b) => timestampMs(a.timestamp) - timestampMs(b.timestamp),
-  );
+  const traces = await listSessionTraceSummaries(sessionId, projectId, storage);
 
   // Return 404 if session has no traces (doesn't exist or belongs to another project)
   if (traces.length === 0) {

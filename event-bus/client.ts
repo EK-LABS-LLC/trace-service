@@ -1,17 +1,12 @@
 import { WALWriter, WALIndex } from "./wal";
 import { WALCheckpoint } from "./checkpoint";
-import type { SpanIngestEventPayload, TraceIngestEventPayload } from "./subjects";
+import type { SpanIngestEventPayload } from "./subjects";
 import { env } from "../config";
 
 interface WALStartOptions {
   walDir: string;
   partitions: number;
 }
-
-let traceWalWriters: WALWriter[] = [];
-let traceWalIndexes: WALIndex[] = [];
-let traceWalCheckpoints: WALCheckpoint[] = [];
-let traceWalDirs: string[] = [];
 
 let spanWalWriters: WALWriter[] = [];
 let spanWalIndexes: WALIndex[] = [];
@@ -44,13 +39,6 @@ function getPartitionIndex(subject: string, partitions: number): number {
   return hashPartition(subject) % partitions;
 }
 
-function traceOptions(options?: Partial<WALStartOptions>): WALStartOptions {
-  return {
-    walDir: options?.walDir ?? env.WAL_DIR,
-    partitions: options?.partitions ?? env.TRACE_WAL_PARTITIONS,
-  };
-}
-
 function spanOptions(options?: Partial<WALStartOptions>): WALStartOptions {
   return {
     walDir: options?.walDir ?? env.WAL_SPAN_DIR,
@@ -58,79 +46,11 @@ function spanOptions(options?: Partial<WALStartOptions>): WALStartOptions {
   };
 }
 
-export function resolveTraceWALDirs(
-  options?: Partial<WALStartOptions>,
-): string[] {
-  const config = traceOptions(options);
-  return resolvePartitionDirs(config.walDir, config.partitions);
-}
-
 export function resolveSpanWALDirs(
   options?: Partial<WALStartOptions>,
 ): string[] {
   const config = spanOptions(options);
   return resolvePartitionDirs(config.walDir, config.partitions);
-}
-
-export function getEventBus(): {
-  publish: (subject: string, payload: TraceIngestEventPayload) => Promise<void>;
-} {
-  if (traceWalWriters.length === 0) {
-    throw new Error("WAL not initialized. Call startWAL() first.");
-  }
-
-  return {
-    publish: async (subject: string, payload: TraceIngestEventPayload) => {
-      const partition = getPartitionIndex(subject, traceWalWriters.length);
-      const writer = traceWalWriters[partition];
-      if (!writer) {
-        throw new Error(`Trace WAL writer missing for partition ${partition}`);
-      }
-      await writer.append(payload);
-    },
-  };
-}
-
-export async function startWAL(options?: Partial<WALStartOptions>): Promise<void> {
-  const config = traceOptions(options);
-  traceWalDirs = resolveTraceWALDirs(options);
-  traceWalWriters = [];
-  traceWalIndexes = [];
-  traceWalCheckpoints = [];
-
-  for (const walDir of traceWalDirs) {
-    const index = new WALIndex(walDir);
-    const checkpoint = new WALCheckpoint(walDir);
-    await checkpoint.load();
-
-    const writer = new WALWriter(
-      {
-        walDir,
-        maxSegmentSize: env.WAL_MAX_SEGMENT_SIZE,
-        maxSegmentAge: env.WAL_MAX_SEGMENT_AGE,
-        maxSegmentLines: env.WAL_MAX_SEGMENT_LINES,
-        fsyncEvery: env.WAL_FSYNC_EVERY,
-        maxSegments: env.WAL_MAX_SEGMENTS,
-        maxRetentionAge: env.WAL_MAX_RETENTION_AGE,
-      },
-      index,
-    );
-
-    await writer.initialize();
-    traceWalIndexes.push(index);
-    traceWalCheckpoints.push(checkpoint);
-    traceWalWriters.push(writer);
-  }
-}
-
-export async function stopWAL(): Promise<void> {
-  for (const writer of traceWalWriters) {
-    await writer.close();
-  }
-  traceWalWriters = [];
-  traceWalIndexes = [];
-  traceWalCheckpoints = [];
-  traceWalDirs = [];
 }
 
 export function getSpanEventBus(): {
@@ -196,24 +116,12 @@ export async function stopSpanWAL(): Promise<void> {
   spanWalDirs = [];
 }
 
-export function getWALIndex(): WALIndex | null {
-  return traceWalIndexes[0] ?? null;
-}
-
-export function getWALCheckpoint(): WALCheckpoint | null {
-  return traceWalCheckpoints[0] ?? null;
-}
-
 export function getSpanWALIndex(): WALIndex | null {
   return spanWalIndexes[0] ?? null;
 }
 
 export function getSpanWALCheckpoint(): WALCheckpoint | null {
   return spanWalCheckpoints[0] ?? null;
-}
-
-export function getWALDirs(): string[] {
-  return traceWalDirs;
 }
 
 export function getSpanWALDirs(): string[] {

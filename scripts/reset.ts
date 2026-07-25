@@ -7,12 +7,13 @@ if (process.env.PULSE_MODE === "scale") {
   const { createScaleRuntimeServices } = await import("../runtime/modes/scale");
   initializeRuntimeServices(createScaleRuntimeServices());
 } else {
-  const { createSingleRuntimeServices } = await import("../runtime/modes/single");
+  const { createSingleRuntimeServices } =
+    await import("../runtime/modes/single");
   initializeRuntimeServices(createSingleRuntimeServices());
 }
 
 const { db } = await import("../db");
-const { apiKeys, userProjects, traces, sessions, projects } = await import("../db/schema");
+const { apiKeys, userProjects, projects } = await import("../db/schema");
 
 /**
  * Reset database - clears all data from all tables.
@@ -22,12 +23,6 @@ async function reset() {
   console.log("Clearing all database tables...");
 
   // Delete in correct order due to foreign key constraints.
-  await db.delete(traces);
-  console.log("  cleared traces");
-
-  await db.delete(sessions);
-  console.log("  cleared sessions");
-
   await db.delete(apiKeys);
   console.log("  cleared api_keys");
 

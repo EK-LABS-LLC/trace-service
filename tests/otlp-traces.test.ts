@@ -1,10 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import {
-  authFetch,
-  cleanupTestData,
-  createTestProject,
-  createTestTraces,
-} from "./setup";
+import { authFetch, cleanupTestData, createTestProject } from "./setup";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { resolveDataPaths } from "../lib/data-paths";
@@ -188,7 +183,10 @@ describe("OTLP / SDK traces", () => {
                         key: "pulse.session_id",
                         value: { stringValue: sessionId },
                       },
-                      { key: "pulse.trace_id", value: { stringValue: traceId } },
+                      {
+                        key: "pulse.trace_id",
+                        value: { stringValue: traceId },
+                      },
                       {
                         key: "gen_ai.provider.name",
                         value: { stringValue: "openai" },
@@ -218,7 +216,10 @@ describe("OTLP / SDK traces", () => {
                         value: { intValue: "36" },
                       },
                       { key: "pulse.cost_cents", value: { doubleValue: 0.42 } },
-                      { key: "pulse.output_text", value: { stringValue: "Hi there" } },
+                      {
+                        key: "pulse.output_text",
+                        value: { stringValue: "Hi there" },
+                      },
                     ],
                     status: { code: 1 },
                   },
@@ -322,10 +323,19 @@ describe("OTLP / SDK traces", () => {
                   attributes: [
                     { key: "pulse.source", value: { stringValue: "sdk" } },
                     { key: "pulse.kind", value: { stringValue: "llm_call" } },
-                    { key: "pulse.event_type", value: { stringValue: "provider_call" } },
-                    { key: "pulse.session_id", value: { stringValue: sessionId } },
+                    {
+                      key: "pulse.event_type",
+                      value: { stringValue: "provider_call" },
+                    },
+                    {
+                      key: "pulse.session_id",
+                      value: { stringValue: sessionId },
+                    },
                     { key: "pulse.trace_id", value: { stringValue: traceId } },
-                    { key: "gen_ai.request.model", value: { stringValue: "gpt-4o-mini" } },
+                    {
+                      key: "gen_ai.request.model",
+                      value: { stringValue: "gpt-4o-mini" },
+                    },
                   ],
                   status: { code: 1 },
                 },
@@ -369,7 +379,9 @@ describe("OTLP / SDK traces", () => {
       spans: Array<{ spanId: string }>;
     };
     expect(detailResponse.status).toBe(200);
-    expect(detail.spans.filter((span) => span.spanId === spanId)).toHaveLength(1);
+    expect(detail.spans.filter((span) => span.spanId === spanId)).toHaveLength(
+      1,
+    );
   });
 
   test("POST /v1/traces persists all 101 spans from one OTLP export", async () => {
@@ -452,104 +464,6 @@ describe("OTLP / SDK traces", () => {
     expect(detailResponse.status).toBe(200);
     expect(detail.spans).toHaveLength(101);
     expect(persistedIds).toEqual(expectedSpanIds);
-  });
-
-  test("GET /v1/traces merges SDK and legacy traces with correct offset", async () => {
-    const project = await createTestProject("Merged Traces Pagination");
-    const sessionId = crypto.randomUUID();
-    await createTestTraces(project.id, 2, sessionId);
-
-    const now = Date.now();
-    const sdkTraceIds = [otelTraceId(), otelTraceId()];
-    for (const [index, traceId] of sdkTraceIds.entries()) {
-      const startNs = BigInt(now + (index + 10) * 60_000) * 1_000_000n;
-      const response = await authFetch("/v1/traces", project.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resourceSpans: [
-            {
-              scopeSpans: [
-                {
-                  spans: [
-                    {
-                      traceId,
-                      spanId: otelSpanId(),
-                      name: "provider_call",
-                      startTimeUnixNano: startNs.toString(),
-                      endTimeUnixNano: (startNs + 50_000_000n).toString(),
-                      attributes: [
-                        { key: "pulse.source", value: { stringValue: "sdk" } },
-                        { key: "pulse.kind", value: { stringValue: "llm_call" } },
-                        {
-                          key: "pulse.event_type",
-                          value: { stringValue: "provider_call" },
-                        },
-                        {
-                          key: "pulse.session_id",
-                          value: { stringValue: sessionId },
-                        },
-                        {
-                          key: "pulse.trace_id",
-                          value: { stringValue: traceId },
-                        },
-                        {
-                          key: "gen_ai.provider.name",
-                          value: { stringValue: "anthropic" },
-                        },
-                        {
-                          key: "gen_ai.request.model",
-                          value: { stringValue: "claude-sonnet" },
-                        },
-                      ],
-                      status: { code: 1 },
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        }),
-      });
-      expect(response.status).toBe(200);
-    }
-
-    const page1 = await waitForApiResponse(
-      `/v1/traces?session_id=${sessionId}&limit=2&offset=0`,
-      project.apiKey,
-      (data) => (data as { total?: number }).total === 4,
-    );
-    const page1Data = (await page1.json()) as {
-      traces: Array<{ traceId: string }>;
-      total: number;
-      limit: number;
-      offset: number;
-    };
-    expect(page1.status).toBe(200);
-    expect(page1Data.total).toBe(4);
-    expect(page1Data.limit).toBe(2);
-    expect(page1Data.offset).toBe(0);
-    expect(page1Data.traces).toHaveLength(2);
-
-    const page2 = await authFetch(
-      `/v1/traces?session_id=${sessionId}&limit=2&offset=2`,
-      project.apiKey,
-    );
-    const page2Data = (await page2.json()) as {
-      traces: Array<{ traceId: string }>;
-      total: number;
-      offset: number;
-    };
-    expect(page2.status).toBe(200);
-    expect(page2Data.total).toBe(4);
-    expect(page2Data.offset).toBe(2);
-    expect(page2Data.traces).toHaveLength(2);
-
-    const allIds = new Set([
-      ...page1Data.traces.map((trace) => trace.traceId),
-      ...page2Data.traces.map((trace) => trace.traceId),
-    ]);
-    expect(allIds.size).toBe(4);
   });
 
   test("POST /v1/traces queues valid spans and reports validation rejects", async () => {

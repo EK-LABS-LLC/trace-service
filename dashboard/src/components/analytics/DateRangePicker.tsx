@@ -47,7 +47,7 @@ const ChevronDownIcon = () => (
 
 function formatDateForInput(date: Date | null): string {
   if (!date) return "";
-  return date.toISOString().split("T")[0];
+  return date.toISOString().split("T")[0] ?? "";
 }
 
 function getPresetLabel(preset: DateRangePreset): string {

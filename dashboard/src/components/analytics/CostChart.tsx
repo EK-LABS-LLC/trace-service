@@ -118,7 +118,7 @@ export default function CostChart({ data, groupBy = "day" }: CostChartProps) {
         period: formatPeriodLabel(period),
       };
       for (const [provider, values] of Object.entries(series)) {
-        point[provider] = values[i];
+        point[provider] = values[i] ?? 0;
       }
       return point;
     });

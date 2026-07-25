@@ -13,6 +13,12 @@ if [[ "$SPLIT" != "0" && "$SPLIT" != "1" ]]; then
   exit 1
 fi
 
+export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-key-at-least-32-characters-long}"
+export ENCRYPTION_KEY="${ENCRYPTION_KEY:-8d2a52c8333cabd7d3e49fd6a60da5574f5722d64fc4a2b211390a1634553a03}"
+export BETTER_AUTH_URL="${BETTER_AUTH_URL:-http://localhost:3000}"
+export FRONTEND_URL="${FRONTEND_URL:-$BETTER_AUTH_URL}"
+export NODE_ENV="${NODE_ENV:-test}"
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -29,7 +35,6 @@ fi
 
 TEST_DATA_DIR="$(mktemp -d "/tmp/pulse-test-${SUFFIX}.XXXXXX")"
 DATABASE_PATH="${TEST_DATA_DIR}/pulse.test.db"
-WAL_DIR="${TEST_DATA_DIR}/wal.test"
 WAL_SPAN_DIR="${TEST_DATA_DIR}/wal-spans.test"
 
 APP_LOG="/tmp/trace-service-${SUFFIX}-test.log"
@@ -98,16 +103,16 @@ wait_for_postgres() {
 }
 
 start_single() {
-  DATABASE_PATH="$DATABASE_PATH" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" bun run db:migrate
+  DATABASE_PATH="$DATABASE_PATH" WAL_SPAN_DIR="$WAL_SPAN_DIR" bun run db:migrate
 
   if [[ "$SPLIT" == "1" ]]; then
     echo "Using split test port $PORT"
-    PORT="$PORT" DATABASE_PATH="$DATABASE_PATH" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=listener bun run pulse.ts >"$LISTENER_LOG" 2>&1 &
+    PORT="$PORT" DATABASE_PATH="$DATABASE_PATH" WAL_SPAN_DIR="$WAL_SPAN_DIR" SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=listener bun run pulse.ts >"$LISTENER_LOG" 2>&1 &
     PIDS+=("$!")
-    PORT="$PORT" DATABASE_PATH="$DATABASE_PATH" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=api bun run pulse.ts >"$API_LOG" 2>&1 &
+    PORT="$PORT" DATABASE_PATH="$DATABASE_PATH" WAL_SPAN_DIR="$WAL_SPAN_DIR" SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=api bun run pulse.ts >"$API_LOG" 2>&1 &
     PIDS+=("$!")
   else
-    PORT="$PORT" DATABASE_PATH="$DATABASE_PATH" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 bun run pulse.ts >"$APP_LOG" 2>&1 &
+    PORT="$PORT" DATABASE_PATH="$DATABASE_PATH" WAL_SPAN_DIR="$WAL_SPAN_DIR" SPAN_WAL_PARTITIONS=1 bun run pulse.ts >"$APP_LOG" 2>&1 &
     PIDS+=("$!")
   fi
 }
@@ -125,12 +130,12 @@ start_scale() {
 
   if [[ "$SPLIT" == "1" ]]; then
     echo "Using split scale test port $PORT"
-    PORT="$PORT" PULSE_MODE=scale DATABASE_URL="$SCALE_DATABASE_URL" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=listener bun run pulse.ts >"$LISTENER_LOG" 2>&1 &
+    PORT="$PORT" PULSE_MODE=scale DATABASE_URL="$SCALE_DATABASE_URL" WAL_SPAN_DIR="$WAL_SPAN_DIR" SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=listener bun run pulse.ts >"$LISTENER_LOG" 2>&1 &
     PIDS+=("$!")
-    PORT="$PORT" PULSE_MODE=scale DATABASE_URL="$SCALE_DATABASE_URL" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=api bun run pulse.ts >"$API_LOG" 2>&1 &
+    PORT="$PORT" PULSE_MODE=scale DATABASE_URL="$SCALE_DATABASE_URL" WAL_SPAN_DIR="$WAL_SPAN_DIR" SPAN_WAL_PARTITIONS=1 PULSE_RUNTIME_MODE=api bun run pulse.ts >"$API_LOG" 2>&1 &
     PIDS+=("$!")
   else
-    PULSE_MODE=scale DATABASE_URL="$SCALE_DATABASE_URL" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" TRACE_WAL_PARTITIONS=1 SPAN_WAL_PARTITIONS=1 PORT="$PORT" bun run pulse.ts >"$APP_LOG" 2>&1 &
+    PULSE_MODE=scale DATABASE_URL="$SCALE_DATABASE_URL" WAL_SPAN_DIR="$WAL_SPAN_DIR" SPAN_WAL_PARTITIONS=1 PORT="$PORT" bun run pulse.ts >"$APP_LOG" 2>&1 &
     PIDS+=("$!")
   fi
 }
@@ -154,7 +159,7 @@ if ! wait_for_health "http://localhost:${PORT}/health"; then
 fi
 
 if [[ "$MODE" == "single" ]]; then
-  TEST_BASE_URL="http://localhost:${PORT}" DATABASE_PATH="$DATABASE_PATH" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" bun test --env-file=.env.test
+  TEST_BASE_URL="http://localhost:${PORT}" DATABASE_PATH="$DATABASE_PATH" WAL_SPAN_DIR="$WAL_SPAN_DIR" bun test --env-file=.env.test
 else
-  TEST_BASE_URL="http://localhost:${PORT}" WAL_DIR="$WAL_DIR" WAL_SPAN_DIR="$WAL_SPAN_DIR" bun test --env-file=.env.test
+  TEST_BASE_URL="http://localhost:${PORT}" WAL_SPAN_DIR="$WAL_SPAN_DIR" bun test --env-file=.env.test
 fi

@@ -5,8 +5,8 @@ interface TraceHeaderProps {
   traceId: string;
   status: "success" | "error";
   timestamp: string;
-  provider: string;
-  model: string;
+  provider: string | null;
+  model: string | null;
 }
 
 const ArrowLeftIcon = () => (
@@ -147,8 +147,8 @@ export default function TraceHeader({
           {formatTimestamp(timestamp)}
         </span>
         <div className="flex items-center gap-2">
-          <ProviderBadge provider={provider} />
-          <ModelBadge model={model} />
+          {provider && <ProviderBadge provider={provider} />}
+          {model && <ModelBadge model={model} />}
         </div>
       </div>
     </header>

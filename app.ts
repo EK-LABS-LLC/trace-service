@@ -6,20 +6,25 @@ import { authMiddleware } from "./middleware/auth";
 import { errorHandler } from "./middleware/errors";
 import { logger } from "./middleware/logger";
 import { auth } from "./auth/auth";
+import { handleOtlpTraces, getTraces, getTraceById } from "./routes/traces";
 import {
-  handleBatchTraces,
-  handleAsyncTrace,
-  handleOtlpTraces,
-  getTraces,
-  getTraceById,
-} from "./routes/traces";
-import { handleBatchSpans, handleAsyncSpan, getSpans, getSpanById } from "./routes/spans";
-import { handleGetSessionTraces, handleGetSessionSpans } from "./routes/sessions";
+  handleBatchSpans,
+  handleAsyncSpan,
+  getSpans,
+  getSpanById,
+} from "./routes/spans";
+import {
+  handleGetSessionTraces,
+  handleGetSessionSpans,
+} from "./routes/sessions";
 import { handleGetAnalytics, handleGetSpanAnalytics } from "./routes/analytics";
 import { isAuthenticated } from "./routes/auth";
 import { handleSignupWithProject } from "./routes/signup";
 import { dashboard } from "./routes/dashboard";
-import { handleConsumeLocalLoginToken, handleCreateLocalLoginToken } from "./routes/local-login";
+import {
+  handleConsumeLocalLoginToken,
+  handleCreateLocalLoginToken,
+} from "./routes/local-login";
 
 export function allowedOrigins(): string[] {
   return (env.PULSE_ALLOWED_ORIGINS ?? "")
@@ -84,7 +89,10 @@ export function createApp(): Hono {
 
   // Better-Auth exposes this route by default
   app.post("/api/auth/sign-up/email", (c) => {
-    return c.json({ error: "Use /dashboard/api/signup for account creation" }, 403);
+    return c.json(
+      { error: "Use /dashboard/api/signup for account creation" },
+      403,
+    );
   });
 
   app.post("/dashboard/api/signup", handleSignupWithProject);
@@ -95,8 +103,6 @@ export function createApp(): Hono {
   app.post("/v1/auth/login", isAuthenticated);
 
   app.post("/v1/traces", authMiddleware, handleOtlpTraces);
-  app.post("/v1/traces/batch", authMiddleware, handleBatchTraces);
-  app.post("/v1/traces/async", authMiddleware, handleAsyncTrace);
   app.get("/v1/traces", authMiddleware, getTraces);
   app.get("/v1/traces/:id", authMiddleware, getTraceById);
   app.post("/v1/spans/batch", authMiddleware, handleBatchSpans);

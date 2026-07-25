@@ -7,6 +7,23 @@ import {
   cleanupTestData,
 } from "./setup";
 
+async function ingestSpans(
+  apiKey: string,
+  spans: Record<string, unknown>[],
+): Promise<void> {
+  const response = await authFetch("/v1/spans/batch", apiKey, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(spans),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(
+      `Failed to ingest test spans (${response.status}): ${text}`,
+    );
+  }
+}
+
 interface Trace {
   traceId: string;
   provider: string;
@@ -22,25 +39,13 @@ interface TracesResponse {
   offset: number;
 }
 
-interface BatchResponse {
-  count: number;
-}
-
-interface AsyncResponse {
-  status: string;
-  count?: number;
-}
-
 describe("Traces Endpoints", () => {
   let testProject: { id: string; apiKey: string };
-  let traceIds: string[];
 
   beforeAll(async () => {
     console.log("[traces.test] Setting up test project...");
     testProject = await createTestProject("Traces Test Project");
     console.log(`[traces.test] Created project: ${testProject.id}`);
-    traceIds = await createTestTraces(testProject.id, 15);
-    console.log(`[traces.test] Created ${traceIds.length} test traces`);
   });
 
   afterAll(async () => {
@@ -49,65 +54,21 @@ describe("Traces Endpoints", () => {
   });
 
   describe("GET /v1/traces", () => {
-    test("returns traces for authenticated project", async () => {
-      const response = await authFetch("/v1/traces", testProject.apiKey);
-      const data = (await response.json()) as TracesResponse;
-
-      expect(response.status).toBe(200);
-      expect(data).toHaveProperty("traces");
-      expect(data).toHaveProperty("total");
-      expect(data.traces.length).toBeGreaterThan(0);
-      expect(data.total).toBe(15);
-    });
-
-    test("respects limit parameter", async () => {
-      const response = await authFetch(
-        "/v1/traces?limit=5",
-        testProject.apiKey,
-      );
-      const data = (await response.json()) as TracesResponse;
-
-      expect(response.status).toBe(200);
-      expect(data.traces.length).toBe(5);
-      expect(data.limit).toBe(5);
-    });
-
-    test("respects offset parameter", async () => {
-      const response = await authFetch(
-        "/v1/traces?limit=5&offset=5",
-        testProject.apiKey,
-      );
-      const data = (await response.json()) as TracesResponse;
-
-      expect(response.status).toBe(200);
-      expect(data.traces.length).toBe(5);
-      expect(data.offset).toBe(5);
-    });
-
     test("filters by provider", async () => {
+      const providerProject = await createTestProject(
+        "Provider Filter Traces Test Project",
+      );
+      await createTestTraces(providerProject.id, 3);
       const response = await authFetch(
         "/v1/traces?provider=openai",
-        testProject.apiKey,
-      );
-      const data = (await response.json()) as TracesResponse;
-
-      expect(response.status).toBe(200);
-      data.traces.forEach((trace) => {
-        expect(trace.provider).toBe("openai");
-      });
-    });
-
-    test("filters by status", async () => {
-      const response = await authFetch(
-        "/v1/traces?status=error",
-        testProject.apiKey,
+        providerProject.apiKey,
       );
       const data = (await response.json()) as TracesResponse;
 
       expect(response.status).toBe(200);
       expect(data.traces.length).toBeGreaterThan(0);
       data.traces.forEach((trace) => {
-        expect(trace.status).toBe("error");
+        expect(trace.provider).toBe("openai");
       });
     });
 
@@ -125,18 +86,17 @@ describe("Traces Endpoints", () => {
   });
 
   describe("GET /v1/traces/:id", () => {
-    test("returns single trace by id", async () => {
-      const traceId = traceIds[0] ?? "";
+    test("returns a derived trace by id", async () => {
+      const [traceId] = (await createTestTraces(testProject.id, 1)) as [string];
       const response = await authFetch(
         `/v1/traces/${traceId}`,
         testProject.apiKey,
       );
-      const data = (await response.json()) as Trace;
+      const trace = (await response.json()) as Trace;
 
       expect(response.status).toBe(200);
-      expect(data.traceId).toBe(traceId);
-      expect(data).toHaveProperty("provider");
-      expect(data).toHaveProperty("modelRequested");
+      expect(trace.traceId).toBe(traceId);
+      expect(trace.provider).toBe("openai");
     });
 
     test("returns 404 for non-existent trace", async () => {
@@ -150,134 +110,174 @@ describe("Traces Endpoints", () => {
     });
   });
 
-  describe("POST /v1/traces/batch", () => {
-    test("ingests batch of traces", async () => {
-      const batchData = [
+  describe("GET /v1/traces (span-derived, all sources)", () => {
+    test("agent-source spans appear as traces", async () => {
+      const agentProject = await createTestProject("Agent Traces Test Project");
+      await ingestSpans(agentProject.apiKey, [
         {
-          trace_id: crypto.randomUUID(),
+          span_id: crypto.randomUUID(),
+          trace_id: "trace-agent-1",
+          session_id: "sess-1",
           timestamp: new Date().toISOString(),
-          provider: "openai",
-          model_requested: "gpt-4o",
-          latency_ms: 500,
+          source: "claude_code",
+          kind: "user_prompt",
+          event_type: "user_prompt_submit",
           status: "success",
-          request_body: { model: "gpt-4o", messages: [] },
-          input_tokens: 100,
-          output_tokens: 200,
         },
         {
-          trace_id: crypto.randomUUID(),
+          span_id: crypto.randomUUID(),
+          trace_id: "trace-agent-1",
+          session_id: "sess-1",
           timestamp: new Date().toISOString(),
-          provider: "anthropic",
-          model_requested: "claude-3-opus",
-          latency_ms: 800,
+          source: "claude_code",
+          kind: "tool_use",
+          event_type: "post_tool_use",
+          tool_use_id: "a",
+          tool_name: "Bash",
           status: "success",
-          request_body: { model: "claude-3-opus", messages: [] },
-          input_tokens: 150,
-          output_tokens: 300,
         },
-      ];
+      ]);
 
-      const response = await authFetch("/v1/traces/batch", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(batchData),
-      });
-      const data = (await response.json()) as BatchResponse;
+      const response = await authFetch("/v1/traces", agentProject.apiKey);
+      const data = (await response.json()) as TracesResponse;
 
-      expect(response.status).toBe(202);
-      expect(data.count).toBe(2);
+      expect(response.status).toBe(200);
+      expect(data.traces.map((t) => t.traceId)).toContain("trace-agent-1");
     });
 
-    test("rejects batch with invalid data", async () => {
-      const invalidData = [
+    test("session_start/session_end spans do not form a trace", async () => {
+      const lifecycleProject = await createTestProject(
+        "Lifecycle Traces Test Project",
+      );
+      await ingestSpans(lifecycleProject.apiKey, [
         {
-          // Missing required fields
-          provider: "openai",
+          span_id: crypto.randomUUID(),
+          trace_id: "lifecycle-1",
+          session_id: "sess-2",
+          timestamp: new Date().toISOString(),
+          source: "claude_code",
+          kind: "session",
+          event_type: "session_start",
+          status: "success",
         },
-      ];
+        {
+          span_id: crypto.randomUUID(),
+          trace_id: "lifecycle-1",
+          session_id: "sess-2",
+          timestamp: new Date().toISOString(),
+          source: "claude_code",
+          kind: "session",
+          event_type: "session_end",
+          status: "success",
+        },
+      ]);
 
-      const response = await authFetch("/v1/traces/batch", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(invalidData),
-      });
+      const response = await authFetch("/v1/traces", lifecycleProject.apiKey);
+      const data = (await response.json()) as TracesResponse;
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(data.traces.map((t) => t.traceId)).not.toContain("lifecycle-1");
     });
 
-    test("rejects batch exceeding 100 traces", async () => {
-      const largeBatch = Array.from({ length: 101 }, () => ({
-        trace_id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        provider: "openai",
-        model_requested: "gpt-4o",
-        latency_ms: 500,
-        status: "success",
-        request_body: {},
-      }));
-
-      const response = await authFetch("/v1/traces/batch", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(largeBatch),
-      });
-
-      expect(response.status).toBe(400);
-    });
-  });
-
-  describe("POST /v1/traces/async", () => {
-    test("queues a single trace for async processing", async () => {
-      const tracePayload = {
-        trace_id: crypto.randomUUID(),
-        session_id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        provider: "openai",
-        model_requested: "gpt-4o-mini",
-        latency_ms: 250,
-        status: "success",
-        request_body: { model: "gpt-4o-mini", messages: [] },
-        response_body: { choices: [] },
-        input_tokens: 42,
-        output_tokens: 84,
-      };
-
-      const response = await authFetch("/v1/traces/async", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([tracePayload]),
-      });
-      const data = (await response.json()) as AsyncResponse;
-
-      expect(response.status).toBe(202);
-      expect(data.status).toBe("queued");
-      expect(data.count).toBe(1);
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      const persistedResponse = await authFetch(
-        `/v1/traces?session_id=${tracePayload.session_id}&limit=20`,
-        testProject.apiKey,
+    test("source filter narrows trace list", async () => {
+      const sourceFilterProject = await createTestProject(
+        "Source Filter Traces Test Project",
       );
-      const persisted = (await persistedResponse.json()) as TracesResponse;
-      const persistedTrace = persisted.traces.find(
-        (trace) => trace.traceId === tracePayload.trace_id,
-      );
+      await ingestSpans(sourceFilterProject.apiKey, [
+        {
+          span_id: "c1",
+          trace_id: "tc",
+          session_id: "s",
+          timestamp: new Date().toISOString(),
+          source: "claude_code",
+          kind: "user_prompt",
+          event_type: "user_prompt_submit",
+          status: "success",
+        },
+        {
+          span_id: "k1",
+          trace_id: "tk",
+          session_id: "s",
+          timestamp: new Date().toISOString(),
+          source: "sdk",
+          kind: "llm_call",
+          event_type: "provider_call",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          status: "success",
+        },
+        {
+          span_id: "missing-trace-id",
+          session_id: "s",
+          timestamp: new Date().toISOString(),
+          source: "claude_code",
+          kind: "tool_use",
+          event_type: "post_tool_use",
+          status: "success",
+        },
+      ]);
 
-      expect(persistedTrace).toBeDefined();
-      expect(persistedTrace?.provider).toBe(tracePayload.provider);
-      expect((persistedTrace as { sessionId?: string }).sessionId).toBe(
-        tracePayload.session_id,
+      const response = await authFetch(
+        "/v1/traces?source=claude_code",
+        sourceFilterProject.apiKey,
       );
+      const data = (await response.json()) as TracesResponse;
+
+      expect(response.status).toBe(200);
+      const ids = data.traces.map((t) => t.traceId);
+      expect(ids).toContain("tc");
+      expect(ids).not.toContain("tk");
+      expect(data.total).toBe(1);
     });
 
-    test("rejects invalid trace payload", async () => {
-      const response = await authFetch("/v1/traces/async", testProject.apiKey, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ provider: "openai" }]),
-      });
+    test("paginates derived traces without overlap", async () => {
+      const paginationProject = await createTestProject(
+        "Paginated Traces Test Project",
+      );
+      await createTestTraces(paginationProject.id, 5);
 
-      expect(response.status).toBe(400);
+      const [firstResponse, secondResponse] = await Promise.all([
+        authFetch("/v1/traces?limit=2&offset=0", paginationProject.apiKey),
+        authFetch("/v1/traces?limit=2&offset=2", paginationProject.apiKey),
+      ]);
+      const first = (await firstResponse.json()) as TracesResponse;
+      const second = (await secondResponse.json()) as TracesResponse;
+
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(200);
+      expect(first.total).toBe(5);
+      expect(second.total).toBe(5);
+      expect(first.traces).toHaveLength(2);
+      expect(second.traces).toHaveLength(2);
+      const firstIds = new Set(first.traces.map((trace) => trace.traceId));
+      expect(second.traces.every((trace) => !firstIds.has(trace.traceId))).toBe(
+        true,
+      );
+    });
+
+    test("filters derived traces by status", async () => {
+      const statusProject = await createTestProject(
+        "Status Filter Traces Test Project",
+      );
+      await createTestTraces(statusProject.id, 12);
+
+      const [errorResponse, successResponse] = await Promise.all([
+        authFetch("/v1/traces?status=error", statusProject.apiKey),
+        authFetch("/v1/traces?status=success", statusProject.apiKey),
+      ]);
+      const errors = (await errorResponse.json()) as TracesResponse;
+      const successes = (await successResponse.json()) as TracesResponse;
+
+      expect(errorResponse.status).toBe(200);
+      expect(successResponse.status).toBe(200);
+      expect(errors.total).toBe(1);
+      expect(successes.total).toBe(11);
+      expect(errors.traces.every((trace) => trace.status === "error")).toBe(
+        true,
+      );
+      expect(
+        successes.traces.every((trace) => trace.status === "success"),
+      ).toBe(true);
     });
   });
 });

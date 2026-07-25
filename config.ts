@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { z } from "zod";
 import { resolveDataPaths, resolveOptionalPath } from "./lib/data-paths";
 import { resolveLocalSecrets } from "./lib/local-secrets";
@@ -34,7 +33,6 @@ const envSchema = z.object({
     .min(32, "ENCRYPTION_KEY must be at least 32 characters"),
 
   // WAL Configuration
-  WAL_DIR: z.string().optional(),
   WAL_SPAN_DIR: z.string().optional(),
   WAL_MAX_SEGMENT_SIZE: z.coerce.number().default(100 * 1024 * 1024), // 100MB
   WAL_MAX_SEGMENT_AGE: z.coerce.number().default(24 * 60 * 60 * 1000), // 24 hours
@@ -45,8 +43,6 @@ const envSchema = z.object({
   WAL_PROCESSING_BATCH_SIZE: z.coerce.number().default(100),
   WAL_PROCESSING_INTERVAL_MS: z.coerce.number().default(100),
   WAL_MAX_RETRIES: z.coerce.number().default(3),
-  WAL_DLQ_DIR: z.string().optional(),
-  TRACE_WAL_PARTITIONS: z.coerce.number().int().min(1).optional(),
   SPAN_WAL_PARTITIONS: z.coerce.number().int().min(1).optional(),
 });
 
@@ -71,10 +67,8 @@ function parseEnv() {
   }
 
   const env = result.data;
-  const walDir = resolveOptionalPath(env.WAL_DIR) ?? dataPaths.walDir;
-  const walSpanDir = resolveOptionalPath(env.WAL_SPAN_DIR) ?? dataPaths.walSpanDir;
-  const walDlqDir =
-    resolveOptionalPath(env.WAL_DLQ_DIR) ?? join(walDir, "dead-letter");
+  const walSpanDir =
+    resolveOptionalPath(env.WAL_SPAN_DIR) ?? dataPaths.walSpanDir;
 
   if (env.PULSE_MODE === "scale") {
     if (!env.DATABASE_URL) {
@@ -99,15 +93,12 @@ function parseEnv() {
     ...env,
     PULSE_HOME: dataPaths.pulseHome,
     PULSE_DATA_DIR: dataPaths.pulseDataDir,
-    DATABASE_PATH: resolveOptionalPath(env.DATABASE_PATH) ?? dataPaths.databasePath,
+    DATABASE_PATH:
+      resolveOptionalPath(env.DATABASE_PATH) ?? dataPaths.databasePath,
     DASHBOARD_DIST_DIR: resolveOptionalPath(env.DASHBOARD_DIST_DIR),
     FRONTEND_URL: env.FRONTEND_URL ?? env.BETTER_AUTH_URL,
-    WAL_DIR: walDir,
     WAL_SPAN_DIR: walSpanDir,
-    WAL_DLQ_DIR: walDlqDir,
     DATABASE_URL: env.DATABASE_URL ?? "",
-    TRACE_WAL_PARTITIONS:
-      env.TRACE_WAL_PARTITIONS ?? (env.PULSE_MODE === "scale" ? 4 : 1),
     SPAN_WAL_PARTITIONS:
       env.SPAN_WAL_PARTITIONS ?? (env.PULSE_MODE === "scale" ? 4 : 1),
   };

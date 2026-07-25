@@ -4,7 +4,10 @@ import { storage } from "../db";
 import { queryAgentSessions } from "../services/agent-sessions";
 import { agentSessionQuerySchema } from "../shared/validation";
 
-function parseDateOnly(value: string, boundary: "start" | "end"): Date | undefined {
+function parseDateOnly(
+  value: string,
+  boundary: "start" | "end",
+): Date | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return undefined;
 
@@ -15,7 +18,9 @@ function parseDateOnly(value: string, boundary: "start" | "end"): Date | undefin
   const minute = boundary === "start" ? 0 : 59;
   const second = boundary === "start" ? 0 : 59;
   const millisecond = boundary === "start" ? 0 : 999;
-  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  const date = new Date(
+    Date.UTC(year, month - 1, day, hour, minute, second, millisecond),
+  );
 
   if (
     date.getUTCFullYear() !== year ||
@@ -30,7 +35,7 @@ function parseDateOnly(value: string, boundary: "start" | "end"): Date | undefin
 
 function parseDateParam(
   value: string | number | undefined,
-  boundary: "start" | "end"
+  boundary: "start" | "end",
 ): Date | undefined {
   if (value === undefined) return undefined;
 
@@ -67,7 +72,10 @@ export async function getAgentSessions(c: Context): Promise<Response> {
     params = agentSessionQuerySchema.parse(rawQuery);
   } catch (err) {
     if (err instanceof ZodError) {
-      return c.json({ error: "Invalid query parameters", details: err.issues }, 400);
+      return c.json(
+        { error: "Invalid query parameters", details: err.issues },
+        400,
+      );
     }
     throw err;
   }
@@ -84,13 +92,14 @@ export async function getAgentSessions(c: Context): Promise<Response> {
   const result = await queryAgentSessions(
     projectId,
     {
+      source: params.source,
       dateFrom,
       dateTo,
       limit: params.limit,
       offset: params.offset,
       sort: params.sort,
     },
-    storage
+    storage,
   );
 
   return c.json(result, 200);

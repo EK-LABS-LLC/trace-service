@@ -29,6 +29,27 @@ describe("Sessions Endpoint", () => {
     console.log("[sessions.test] Created 10 test traces");
     await createTestSpans(testProject.id, 12, sessionId);
     console.log("[sessions.test] Created 12 test spans");
+
+    const lifecycleResponse = await authFetch(
+      "/v1/spans/batch",
+      testProject.apiKey,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          ["session_start", "session_end"].map((eventType, index) => ({
+            span_id: crypto.randomUUID(),
+            trace_id: `${sessionId}-session_lifecycle`,
+            session_id: sessionId,
+            timestamp: new Date(Date.now() + index).toISOString(),
+            source: "claude_code",
+            kind: "session",
+            event_type: eventType,
+            status: "success",
+          })),
+        ),
+      },
+    );
+    expect(lifecycleResponse.status).toBe(202);
   });
 
   afterAll(async () => {
@@ -113,7 +134,8 @@ describe("Sessions Endpoint", () => {
 
       expect(response.status).toBe(200);
       expect(data.sessionId).toBe(sessionId);
-      expect(data.spans.length).toBe(12);
+      // 12 plain test spans + 10 llm_call trace spans + 2 lifecycle markers.
+      expect(data.spans.length).toBe(24);
     });
 
     test("spans are ordered by timestamp", async () => {

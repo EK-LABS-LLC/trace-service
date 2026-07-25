@@ -28,6 +28,7 @@ const handleResponse = async <T>(response: Response): Promise<T> => {
 
 export interface GetTracesParams {
   session_id?: string;
+  source?: string;
   provider?: string;
   model?: string;
   status?: string;
@@ -40,19 +41,22 @@ export interface GetTracesParams {
 export interface Trace {
   traceId: string;
   timestamp: string;
-  provider: string;
-  modelRequested: string;
-  modelUsed: string;
+  source: string;
+  summary: string;
+  spanCount: number;
+  provider: string | null;
+  modelRequested: string | null;
+  modelUsed: string | null;
   latencyMs: number;
   status: "success" | "error";
-  costCents: number;
+  costCents: number | null;
   sessionId?: string;
   metadata?: Record<string, unknown>;
   requestBody?: unknown;
   responseBody?: unknown;
   error?: unknown;
-  inputTokens?: number;
-  outputTokens?: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
   outputText?: string;
   finishReason?: string;
   spans?: Span[];
@@ -63,13 +67,14 @@ export interface TracesResponse {
   total: number;
 }
 
-export interface Session {
+export interface SessionTraceSummaries {
   sessionId: string;
   traces: Trace[];
   spans?: Span[];
 }
 
-export type SpanSource = "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
+export type SpanSource =
+  "claude_code" | "codex" | "opencode" | "openclaw" | "sdk";
 
 export type SpanKind =
   | "llm_call"
@@ -101,6 +106,7 @@ export interface Span {
   model?: string;
   agentName?: string;
   metadata?: Record<string, unknown>;
+  label?: string;
 }
 
 export interface SpansResponse {
@@ -108,11 +114,13 @@ export interface SpansResponse {
   total: number;
 }
 
-export type AgentSessionSort = "recent" | "oldest" | "duration" | "errors" | "volume";
+export type AgentSessionSort =
+  "recent" | "oldest" | "duration" | "errors" | "volume";
 
 export interface GetAgentSessionsParams {
   date_from?: string;
   date_to?: string;
+  source?: SpanSource;
   limit?: number;
   offset?: number;
   sort?: AgentSessionSort;
@@ -126,8 +134,13 @@ export interface ApiAgentSessionSummary {
   durationMs: number;
   agentRuns: number;
   toolCalls: number;
+  traceCount: number;
   totalSpans: number;
+  inputTokens: number;
+  outputTokens: number;
+  costCents: number;
   errorCount: number;
+  sources: SpanSource[];
   source?: SpanSource;
   cwd?: string;
   model?: string;
@@ -218,12 +231,6 @@ export interface SpansAnalyticsResponse {
   spansOverTime: Array<{ period: string; count: number }>;
 }
 
-// Session Spans Response
-export interface SessionSpansResponse {
-  sessionId: string;
-  spans: Span[];
-}
-
 export interface GetSpansAnalyticsParams {
   date_from: string;
   date_to: string;
@@ -289,7 +296,9 @@ export interface CreateProjectUserInput {
   role?: "admin" | "user";
 }
 
-export const getTraces = async (params: GetTracesParams = {}): Promise<TracesResponse> => {
+export const getTraces = async (
+  params: GetTracesParams = {},
+): Promise<TracesResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/traces`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
@@ -312,15 +321,22 @@ export const getTrace = async (id: string): Promise<Trace> => {
   return handleResponse<Trace>(response);
 };
 
-export const getSession = async (id: string): Promise<Session> => {
-  const response = await fetch(`${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(id)}`, {
-    credentials: "include",
-    headers: getProjectHeaders(),
-  });
-  return handleResponse<Session>(response);
+export const getSessionTraceSummaries = async (
+  id: string,
+): Promise<SessionTraceSummaries> => {
+  const response = await fetch(
+    `${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(id)}`,
+    {
+      credentials: "include",
+      headers: getProjectHeaders(),
+    },
+  );
+  return handleResponse<SessionTraceSummaries>(response);
 };
 
-export const getSpans = async (params: GetSpansParams = {}): Promise<SpansResponse> => {
+export const getSpans = async (
+  params: GetSpansParams = {},
+): Promise<SpansResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/spans`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
@@ -336,7 +352,7 @@ export const getSpans = async (params: GetSpansParams = {}): Promise<SpansRespon
 };
 
 export const getAgentSessions = async (
-  params: GetAgentSessionsParams = {}
+  params: GetAgentSessionsParams = {},
 ): Promise<AgentSessionsResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/agent-sessions`);
   Object.entries(params).forEach(([key, value]) => {
@@ -352,7 +368,9 @@ export const getAgentSessions = async (
   return handleResponse<AgentSessionsResponse>(response);
 };
 
-export const getAnalytics = async (params: GetAnalyticsParams = {}): Promise<AnalyticsResponse> => {
+export const getAnalytics = async (
+  params: GetAnalyticsParams = {},
+): Promise<AnalyticsResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/analytics`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
@@ -368,7 +386,7 @@ export const getAnalytics = async (params: GetAnalyticsParams = {}): Promise<Ana
 };
 
 export const getSpansAnalytics = async (
-  params: GetSpansAnalyticsParams
+  params: GetSpansAnalyticsParams,
 ): Promise<SpansAnalyticsResponse> => {
   const url = new URL(`${getBaseUrl()}/dashboard/api/analytics/spans`);
   Object.entries(params).forEach(([key, value]) => {
@@ -384,18 +402,9 @@ export const getSpansAnalytics = async (
   return handleResponse<SpansAnalyticsResponse>(response);
 };
 
-export const getSessionSpans = async (sessionId: string): Promise<SessionSpansResponse> => {
-  const response = await fetch(
-    `${getBaseUrl()}/dashboard/api/sessions/${encodeURIComponent(sessionId)}/spans`,
-    {
-      credentials: "include",
-      headers: getProjectHeaders(),
-    }
-  );
-  return handleResponse<SessionSpansResponse>(response);
-};
-
-export const createProject = async (name: string): Promise<CreateProjectResult> => {
+export const createProject = async (
+  name: string,
+): Promise<CreateProjectResult> => {
   const response = await fetch(`${getBaseUrl()}/dashboard/api/projects`, {
     method: "POST",
     credentials: "include",
@@ -415,28 +424,36 @@ export const getApiKeys = async (): Promise<ApiKeysResponse> => {
   return handleResponse<ApiKeysResponse>(response);
 };
 
-export const deleteApiKey = async (keyId: string): Promise<{ success: boolean }> => {
-  const response = await fetch(`${getBaseUrl()}/dashboard/api/api-keys/${keyId}`, {
-    method: "DELETE",
-    credentials: "include",
-    headers: getProjectHeaders(),
-  });
+export const deleteApiKey = async (
+  keyId: string,
+): Promise<{ success: boolean }> => {
+  const response = await fetch(
+    `${getBaseUrl()}/dashboard/api/api-keys/${keyId}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+      headers: getProjectHeaders(),
+    },
+  );
   return handleResponse<{ success: boolean }>(response);
 };
 
 export const updateApiKeyName = async (
   keyId: string,
-  name: string
+  name: string,
 ): Promise<{ success: boolean }> => {
-  const response = await fetch(`${getBaseUrl()}/dashboard/api/api-keys/${keyId}`, {
-    method: "PATCH",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...getProjectHeaders(),
+  const response = await fetch(
+    `${getBaseUrl()}/dashboard/api/api-keys/${keyId}`,
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...getProjectHeaders(),
+      },
+      body: JSON.stringify({ name }),
     },
-    body: JSON.stringify({ name }),
-  });
+  );
   return handleResponse<{ success: boolean }>(response);
 };
 
@@ -461,7 +478,7 @@ export const getProjectUsers = async (): Promise<ProjectUsersResponse> => {
 };
 
 export const createProjectUser = async (
-  input: CreateProjectUserInput
+  input: CreateProjectUserInput,
 ): Promise<{ user: ProjectUserInfo }> => {
   const response = await fetch(`${getBaseUrl()}/dashboard/api/users`, {
     method: "POST",
